@@ -1,0 +1,85 @@
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.poetry]
+name = "MEMFlow"
+version = "0.1.0"
+authors = [
+    "Davide Valsecchi <davide.valsecchi@cern.ch>",
+]
+maintainers = [
+    "Davide Valsecchi <davide.valsecchi@cern.ch>",
+]
+homepage = "https://github.com/valsdav/MEMFlow"
+repository = "https://github.com/valsdav/MEMFlow"
+license = "BSD-3-Clause"
+description = "A package for Matrix Element integration with Normalizing flows"
+readme = "README.md"
+
+classifiers = [
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Development Status :: 1 - Planning",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.7"
+typing_extensions = { version = ">=3.7", python = "<3.8" }
+
+pytest = { version = ">=6", optional = true }
+sphinx = { version = "^4.0", optional = true }
+sphinx_book_theme = { version = ">=0.1.0", optional = true }
+sphinx_copybutton = { version = ">=0.3.0", optional = true }
+
+[tool.poetry.dev-dependencies]
+pytest = ">= 6"
+
+[tool.poetry.extras]
+test = ["pytest"]
+dev = ["pytest"]
+docs = [
+    "sphinx",
+    "sphinx-book-theme",
+    "sphinx_copybutton",
+]
+
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+testpaths = [
+    "tests",
+]
+
+
+[tool.mypy]
+files = "src"
+python_version = "3.7"
+warn_unused_configs = true
+strict = true
+show_error_codes = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+warn_unreachable = true
+
+
+[tool.isort]
+profile = "black"
+
+
+[tool.pylint]
+master.py-version = "3.7"
+master.ignore-paths= ["src/MEMFlow/_version.py"]
+reports.output-format = "colorized"
+similarities.ignore-imports = "yes"
+messages_control.disable = [
+  "design",
+  "fixme",
+  "line-too-long",
+  "wrong-import-position",
+]
