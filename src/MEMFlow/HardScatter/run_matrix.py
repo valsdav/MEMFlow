@@ -1,14 +1,45 @@
+from __future__ import annotations
+
+import time
+
 import hardscatter
 import numpy as np
+import vector
+
+p1 = np.array(
+    [
+        [0.5000000e03, 0.0000000e00, 0.0000000e00, 0.5000000e03],
+        [0.5000000e03, 0.0000000e00, 0.0000000e00, -0.5000000e03],
+        [0.2500000e03, 0.0240730e03, 0.4173556e03, -0.1872274e03],
+        [0.2500000e03, 0.0840730e03, 0.4173556e03, -0.1872274e03],
+        [0.5000000e03, -0.1040730e03, -0.4173556e03, 0.1872274e03],
+    ]
+)
 
 
-p1 =np.array([[  0.5000000E+03,  0.0000000E+00,  0.0000000E+00,  0.5000000E+03],
-    [0.5000000E+03,  0.0000000E+00,  0.0000000E+00, -0.5000000E+03],
-    [ 0.2500000E+03,  0.0240730E+03,  0.4173556E+03, -0.1872274E+03],
-    [ 0.2500000E+03,  0.0840730E+03,  0.4173556E+03, -0.1872274E+03],
-    [ 0.5000000E+03, -0.1040730E+03, -0.4173556E+03,  0.1872274E+03]
-    ])
+start = time.time()
+pdg = [2, 2, -6, 6, 25]
+p1T = p1.T
+print(p1T)
+for i in range(100000):
+    hardscatter.smatrix_ttH(pdg, p1T)
+end = time.time()
+
+print("Elapsed (loop) = %s" % (end - start))
 
 
-ans = hardscatter.smatrix_ttH([2,2,-6,6,25],p1.T)
-print (ans)
+start = time.time()
+for i in range(100000):
+    hardscatter.smatrix_ttH(pdg, p1T)
+end = time.time()
+
+print("Elapsed (2nd loop) = %s" % (end - start))
+
+
+p2 = np.tile(p1T, (10000, 1, 1))
+pdgs2 = np.tile([2, 2, -6, 6, 25], (10000, 1, 1))
+start = time.time()
+hardscatter.smatrix_ttH_many(pdgs2, p2)
+end = time.time()
+
+print("Elapsed (no compilation) = %s" % (end - start))
