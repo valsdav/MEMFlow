@@ -1,0 +1,46 @@
+Bootstrap: docker
+From: almalinux:9
+
+%files
+ `pwd`/LHAPDF-6.5.3.tar.gz /opt/
+ `pwd`/MG5_aMC_v3_3_2.tar.gz /opt/
+
+%post
+        
+  dnf install \
+      gcc \
+      glibc-devel \
+      gcc-c++ \
+      gcc-gfortran \
+      python39 \
+      platform-python-devel \
+      which \
+      wget \
+      -y
+
+  export PYTHON=/usr/bin/python3
+
+  cd /opt/
+  tar -zxvf LHAPDF-6.5.3.tar.gz
+  cd LHAPDF-6.5.3
+  ./configure --prefix=/opt/LHAPDF
+
+  make -j 8
+  make install
+
+  wget http://lhapdfsets.web.cern.ch/lhapdfsets/current/NNPDF40_nnlo_hessian_pdfas.tar.gz -O- | tar xz -C /opt/LHAPDF/share/LHAPDF
+
+  cd ..
+  tar -zxvf MG5_aMC_v3_3_2.tar.gz
+  
+
+
+
+%environment
+
+export PATH=$PATH:/opt/LHAPDF/bin:/opt/MG5_aMC_v3_3_2/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/LHAPDF/lib:/opt/MG5_aMC_v3_3_2/lib
+export PYTHONPATH=$PYTHONPATH:/opt/LHAPDF/lib64/python3.9/site-packages
+export LHAPDF_DATA_PATH=/opt/LHAPDF/share/LHAPDF
+
+

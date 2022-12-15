@@ -1,0 +1,35 @@
+#include "Gridpack.h"
+#include "TLorentzVector.h"
+#include <vector>
+#include <array>
+
+using namespace ROOT::Math;
+using namespace std;
+
+const float TOP_MASS = 172.69;
+const float HIGGS_MASS = 125.25;
+
+std::array<PtEtaPhiMVector,12> getVectorsFromPoints(std::array<double, 19> points){
+  /*
+    The point are ordered by
+    - pt (top_had, top_lep, H)  [0,1,2]
+    - eta (top_had, top_lep, H) [3,4,5]
+    -phi (top_had, top_lep, H) [6,7,8]
+    - gluon Z  [9]
+    
+    
+   */
+
+  PtEtaPhiMVector top_had {points[0], points[3], points[6], TOP_MASS};
+  PtEtaPhiMVector top_lep {points[1], points[4], points[7], TOP_MASS};
+  PtEtaPhiMVector H {points[2], points[5], points[8], HIGGS_MASS};
+
+  auto tot = top_had + top_lep + H;
+  auto gluon = -tot;
+  gluon.SetPz = points[9]
+  
+}
+
+std::array<double,19> getPointsFromVector(std::array<PtEtaPhiMVector, 12> vectors){
+  
+}

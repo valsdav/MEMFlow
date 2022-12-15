@@ -30,3 +30,10 @@
 [rtd-badge]:                https://readthedocs.org/projects/MEMFlow/badge/?version=latest
 [rtd-link]:                 https://MEMFlow.readthedocs.io/en/latest/?badge=latest
 [sk-badge]:                 https://scikit-hep.org/assets/images/Scikit--HEP-Project-blue.svg
+
+
+# Installation
+- Start apptainer image with madgraph and LHAPDF
+- Generate the process
+- Compile it for python with https://cp3.irmp.ucl.ac.be/projects/madgraph/wiki/FAQ-General-4
+
