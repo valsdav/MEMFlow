@@ -303,7 +303,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         
         
         shat=xb_1*xb_2*self.collider_energy**2
-        return output_returner_save, weight/(2*shat), xb_1, xb_2, M, self.K_t
+        return output_returner_save, weight/(2*shat), xb_1, xb_2
         
        
     
@@ -385,7 +385,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         
        
         K_t=M.clone()
-        self.K_t = K_t
         
         masses_sum=torch.flip(torch.cumsum(torch.flip(self.masses_t,(-1,)),-1),(-1,))
         M+=masses_sum[:-1].to(M.device)
