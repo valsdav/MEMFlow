@@ -37,11 +37,13 @@ def boostVector_t(inputt):
     
 def square_t(inputt):
     if(inputt.shape[1]==4 or inputt.shape[0]==4):
-        
         return dot_t(inputt,inputt)
     else:
         
         return torch.sum(inputt*inputt,-1)
+
+def mass_t(inputt):
+    return torch.sqrt(square_t(inputt))
     
 def dot_t(inputa,inputb):
     """Dot product for four vectors"""
@@ -111,9 +113,7 @@ def cosTheta_t(inputt):
         assert (ptot > 0.)
         return inputt[3] / ptot
     
-
-
-    
+   
 
 def phi_t(inputt):
 
