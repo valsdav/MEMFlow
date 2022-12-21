@@ -29,11 +29,18 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.7"
 typing_extensions = { version = ">=3.7", python = "<3.8" }
-
 pytest = { version = ">=6", optional = true }
 sphinx = { version = "^4.0", optional = true }
 sphinx_book_theme = { version = ">=0.1.0", optional = true }
 sphinx_copybutton = { version = ">=0.3.0", optional = true }
+torch = ">1.13"
+tensorflow = ">2.8"
+awkward = ">2.0"
+vector = "*"
+jupyterlab = "*"
+requests = "*"
+
+
 
 
 [tool.poetry.dev-dependencies]
