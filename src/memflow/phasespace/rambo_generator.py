@@ -116,7 +116,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
     
     def get_pdfQ2(self, pdf, pdg, x, scale2):
         """ Call the PDF and return the corresponding density."""
-   
 
         if pdf is None:
             return torch.ones_like(x)
@@ -124,12 +123,8 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         if pdg not in [21] and abs(pdg) not in range(1,7):
             return torch.ones_like(x)
       
-        
         # Call to lhapdf API
-        
         f = pdf.xfxQ2(pdg, x, scale2)
-        
-        
 
         return torch.tensor(f,dtype=torch.double, device=x.device)/x
     

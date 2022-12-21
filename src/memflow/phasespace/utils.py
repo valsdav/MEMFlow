@@ -130,6 +130,13 @@ def uniform_distr(r,minv,maxv):
        
         #print(dvariable)
         return variable, dvariable
+
+def uniform_distr_t(r,minv,maxv):
+        """distributes r uniformly within (min, max), with jacobian dvariable"""
+        dvariable = (maxv-minv)
+        variable = minv + dvariable*r
+        #print(dvariable)
+        return variable, dvariable
     
 def boost_to_lab_frame( momenta, xb_1, xb_2):
     """Boost a phase-space point from the COM-frame to the lab frame, given Bjorken x's.
