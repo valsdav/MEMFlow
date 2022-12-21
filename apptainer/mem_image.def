@@ -12,6 +12,7 @@ From: almalinux:9
       platform-python-devel \
       which \
       wget \
+      git \
       -y
 
   export PYTHON=/usr/bin/python3

@@ -1,0 +1,2 @@
+recursive-include memflow/ *.json
+recursive-include memflow/ *.txt
