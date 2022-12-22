@@ -11,6 +11,7 @@ import datetime
 import sys
 from .utils import *
 
+
 class PhaseSpaceGeneratorError(Exception):
     pass
 
@@ -140,9 +141,12 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             return torch.ones_like(x)
 
         # Call to lhapdf API
-        f = pdf.xfxQ2([pdg], tf.convert_to_tensor(x, dtype=tf.float64),
-                      tf.convert_to_tensor(scale2, dtype=tf.float64))
-        
+        f = pdf.xfxQ2(
+            [pdg],
+            tf.convert_to_tensor(x, dtype=tf.float64),
+            tf.convert_to_tensor(scale2, dtype=tf.float64),
+        )
+
         return torch.tensor(f.numpy(), dtype=torch.double, device=x.device) / x
 
     def generateKinematics_batch(
@@ -374,7 +378,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         shat = xb_1 * xb_2 * self.collider_energy**2
         return output_returner_save, weight / (2 * shat), xb_1, xb_2
 
-    
     def bisect_vec_batch(self, v_t, target=1.0e-16, maxLevel=600):
         """Solve v = (n+2) * u^(n+1) - (n+1) * u^(n+2) for u. Vectorized, batched"""
         if v_t.size(1) == 0:
@@ -576,57 +579,61 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    
-    def generatePSpoint_batch(self, E_cm, momenta_batch, pdgs=[0,0]):
+    def generatePSpoint_batch(self, E_cm, momenta_batch, pdgs=[0, 0]):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input
         """
-        P = momenta_batch[:,2:].clone() # copy the final state particles
+        P = momenta_batch[:, 2:].clone()  # copy the final state particles
         # Check if we are in the CM
-        ref_lab = momenta_batch[:,0,:] + momenta_batch[:,0,:]
-        if not ((rho2_t(ref_lab)==0).any()):
-            lab_boost = - boostVector_t(ref_lab)
+        ref_lab = momenta_batch[:, 0, :] + momenta_batch[:, 0, :]
+        if not ((rho2_t(ref_lab) == 0).any()):
+            lab_boost = -boostVector_t(ref_lab)
             boost_tt(P, lab_boost.unsqueeze(1))
 
         # We start getting M and then K
-        M = torch.tensor([0.]*n,requires_grad=False, dtype=torch.double, device=P.device)
-        M = torch.unsqueeze(M, 0).repeat(P.shape[0],1)
+        M = torch.tensor(
+            [0.0] * n, requires_grad=False, dtype=torch.double, device=P.device
+        )
+        M = torch.unsqueeze(M, 0).repeat(P.shape[0], 1)
         Q = torch.zeros_like(P)
-        Q[:,-1] = P[:,-1]  # Qn = pn
+        Q[:, -1] = P[:, -1]  # Qn = pn
         n = self.n_final
         # intermediate mass
         for i in range(n, 0, -1):
-            j = i-1
+            j = i - 1
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
             M[:, j] -= torch.sum(final_masses[j:])
 
         # output [0,1] distributed numbers
-        r = torch.zeros(P.shape[0], self.nDimPhaseSpace )
+        r = torch.zeros(P.shape[0], self.nDimPhaseSpace)
 
         for i in range(n, 1, -1):
-            j = i-1 #index for 0-based tensors
-            # in the direct algo the u are squared. 
-            u = (M[:, j]/M[:, j-1])**2
-            
-            r[:, j-1] = (n+1-i)*(torch.pow(u,(n-i))) - (n-i)*(torch.pow(u,(n+1-i)))
-            
-            Q[:, j-1] = Q[:, j] + P[:, j-1]
-            
-            boost_t(P[:, j-1], -boostVector_t(Q[:, j-1]))
-            
-            r[:, n-5+2*i-1] = ((P[:, j-1, 3]/ torch.sqrt(rho2_t(P[:, j-1]))) + 1)/2
-            #phi= tan^-1(Py/Px)
-            phi = torch.atan(P[:, j-1, 2]/P[:, j-1, 1])
+            j = i - 1  # index for 0-based tensors
+            # in the direct algo the u are squared.
+            u = (M[:, j] / M[:, j - 1]) ** 2
+
+            r[:, j - 1] = (n + 1 - i) * (torch.pow(u, (n - i))) - (n - i) * (
+                torch.pow(u, (n + 1 - i))
+            )
+
+            Q[:, j - 1] = Q[:, j] + P[:, j - 1]
+
+            boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
+
+            r[:, n - 5 + 2 * i - 1] = (
+                (P[:, j - 1, 3] / torch.sqrt(rho2_t(P[:, j - 1]))) + 1
+            ) / 2
+            # phi= tan^-1(Py/Px)
+            phi = torch.atan(P[:, j - 1, 2] / P[:, j - 1, 1])
             # Fixing phi depending on X and y sign
             # 4th quandrant  (px > 0, py < 0)
-            deltaphi = torch.where((P[:, j-1, 2]<0)&(P[:, j-1, 1]>0), 2*torch.pi, 0.)
+            deltaphi = torch.where(
+                (P[:, j - 1, 2] < 0) & (P[:, j - 1, 1] > 0), 2 * torch.pi, 0.0
+            )
             # 2th and 3th quadratant  (px < 0, py whatever)
-            deltaphi += torch.where((P[:, j-1, 1]<0), torch.pi, 0.)
+            deltaphi += torch.where((P[:, j - 1, 1] < 0), torch.pi, 0.0)
             phi += deltaphi
-            r[:, n-4+2*i-1] = phi/(2*torch.pi)
+            r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
 
         return r
-
-            
-    
