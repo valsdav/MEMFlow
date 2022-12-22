@@ -40,9 +40,7 @@ class VirtualPhaseSpaceGenerator(object):
             else torch.device("cpu")
         )
         self.initial_masses = initial_masses
-        self.masses_t = torch.tensor(
-            final_masses, requires_grad=False, dtype=torch.double, device=dev
-        )
+        self.masses_t = final_masses.clone().to(dev)
         self.n_initial = len(initial_masses)
         self.n_final = len(final_masses)
 
@@ -271,6 +269,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             E_cm.to(random_variables.device)
             self.masses_t.to(random_variables.device)
 
+        # generate the intermediate masses and get the additional weight for massive particles
         weight *= self.generateIntermediatesMassive_batch(M, E_cm, random_variables)
         Q_t = torch.tensor(
             [0.0, 0.0, 0.0, 0.0],
@@ -323,7 +322,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             Q_t = nextQ_t
 
         output_returner[:, -1, :] = Q_t
-
+        # Create the partons in the CM
         self.setInitialStateMomenta_batch(output_returner, E_cm)
 
         output_returner_save = output_returner.clone()
@@ -371,10 +370,11 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             )
 
         weight = weight * factor2
-
+        # Additional weight factor 1/2s
         shat = xb_1 * xb_2 * self.collider_energy**2
         return output_returner_save, weight / (2 * shat), xb_1, xb_2
 
+    
     def bisect_vec_batch(self, v_t, target=1.0e-16, maxLevel=600):
         """Solve v = (n+2) * u^(n+1) - (n+1) * u^(n+2) for u. Vectorized, batched"""
         if v_t.size(1) == 0:
@@ -576,10 +576,10 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
+    
     def generatePSpoint_batch(self, E_cm, momenta_batch, pdgs=[0,0]):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input
-
         """
         P = momenta_batch[:,2:].clone() # copy the final state particles
         # Check if we are in the CM
