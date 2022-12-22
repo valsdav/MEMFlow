@@ -142,9 +142,10 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             return torch.ones_like(x)
 
         # Call to lhapdf API
-        f = pdf.xfxQ2(pdg, tf.convert_to_tensor(x), scale2)
-
-        return torch.tensor(f, dtype=torch.double, device=x.device) / x
+        f = pdf.xfxQ2([pdg], tf.convert_to_tensor(x, dtype=tf.float64),
+                      tf.convert_to_tensor(scale2, dtype=tf.float64))
+        
+        return torch.tensor(f.numpy(), dtype=torch.double, device=x.device) / x
 
     def generateKinematics_batch(
         self,
@@ -212,8 +213,8 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                 E_cm = torch.sqrt(tau) * E_cm
                 wgt_jac *= wgt_jac1 * wgt_jac2
             else:
-                xb_1 = random_variables_full[:, -1]
-                xb_2 = random_variables_full[:, -2]
+                xb_1 = random_variables_full[:, -2]
+                xb_2 = random_variables_full[:, -1]
                 E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
 
             # The original code was using the Z scale as Q^2 of the PDF
