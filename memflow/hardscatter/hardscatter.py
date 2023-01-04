@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from . import ttH
+import numba
 
 param_card = os.path.join(os.path.dirname(__file__), "ttH", "param_card.dat")
 
@@ -17,5 +18,10 @@ def smatrix_ttH(pdgs, momenta):
     # transverse of the momenta for fortran ordering
     return ttH.smatrixhel(pdgs, proc_id, momenta, alphas, scale2, nhel)
 
-
-smatrix_ttH_many = np.vectorize(smatrix_ttH, otypes=[float])
+@numba.jit
+def eval_smatrix(pdgids, momenta):
+    inputs = np.transpose(momenta.numpy(), (0,2,1))
+    output = torch.zeros((momenta.shape[0]))
+    for i in range(inputs.shape[0]):
+        output[i] = smatrix_ttH(pdgids, inputs[i])
+    return output

@@ -1,7 +1,8 @@
 from . import rambo_generator
 from . import utils
 import torch
-
+import tensorflow as tf
+from particle import Particle
 
 def generate_x1x2(N, E_cm, final_state_mass):
     rnd1 = torch.rand(N, 1)
@@ -22,40 +23,64 @@ def get_x1x2(x1_u, x2_u, E_cm, final_state_mass):
     return x1, x2, dw1 * dw2
 
 
-def generate_random_phase_space_points(N, E_cm, initial_pdgs, final_masses, pdf=None):
-    final_state_mass = torch.sum(final_masses)
+def get_pdfQ2(self, pdf, pdg, x, scale2):
+        """Call the PDF and return the corresponding density."""
+        if pdf is None:
+            return torch.ones_like(x)
 
-    pdf_active = True if pdf else False
+        if pdg not in [21] and abs(pdg) not in range(1, 7):
+            return torch.ones_like(x)
 
-    generator = rambo_generator.FlatInvertiblePhasespace(
-        [0.0, 0.0], final_masses, pdf=pdf, pdf_active=pdf_active, tau=False
-    )
-
-    # Sampling correctly x1 and x2
-    if pdf_active:
-        x1_, x2_, wpdf = generate_x1x2(N, E_cm, final_state_mass)
-        rnd = torch.cat((torch.rand(N, generator.nDimPhaseSpace()), x1_, x2_), axis=1)
-    else:
-        rnd = torch.rand(N, generator.nDimPhaseSpace())
-
-    momenta, weight, x1, x2 = generator.generateKinematics_batch(
-        E_cm, rnd, pdgs=initial_pdgs
-    )
-
-    return momenta, weight, x1, x2, wpdf
+        # Call to lhapdf API
+        f = pdf.xfxQ2(
+            [pdg],
+            tf.convert_to_tensor(x, dtype=tf.float64),
+            tf.convert_to_tensor(scale2, dtype=tf.float64),
+        )
+        return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
 
 
-def get_momenta_from_ps(points, E_cm, initial_pdgs, final_masses, pdf=None):
-    pdf_active = True if pdf else False
-    generator = rambo_generator.FlatInvertiblePhasespace(
-        [0.0, 0.0], final_masses, pdf=pdf, pdf_active=pdf_active, tau=False
-    )
 
-    x1, x2 = get_x1x2(points[:, -2], points[:, -1], E_cm)
-    rnd = torch.cat((points[:, generator.nDimPhaseSpace() - 2], x1, x2), axis=1)
+class PhaseSpace:
 
-    momenta, weight, *x = generator.generateKinematics_batch(
-        E_cm, rnd, pdgs=initial_pdgs
-    )
+    def __init__(self, E_cm, initial_pdgs, final_pdgs, pdf=None):
+        self.E_cm = E_cm
+        self.initial_pdgs = initial_pdgs
+        self.final_pdgs = final_pdgs
+        self.final_masses = torch.tensor([ Particle.from_pdgid(pdg).mass/1e3 for pdg in self.final_pdgs])
+        self.final_state_mass = torch.sum(self.final_masses)
+        self.pdf = pdf
+        # init the generatoer
+        self.generator = rambo_generator.FlatInvertiblePhasespace(
+            [0.0, 0.0], #initial particle mass
+            self.final_masses,
+            pdf=pdf, pdf_active=True, tau=False
+        )
 
-    return momenta, weight, x1, x2
+    def generate_random_phase_space_points(self, N):
+        '''
+        Generate N random phase space points from the CM of E_cm energy,
+        representing n final state particles with final_masses mass.
+        If `pdf` is not None (but a pdfflow instance), the pdf weight is included and
+        read from the `pdf` object.
+        '''
+        # The pdf_active flag is true so that the last two random
+        # points represent the x1 and x2.
+        # 
+       
+        # Sampling correctly x1 and x2
+        x1_, x2_, wx1x2 = generate_x1x2(N, self.E_cm, self.final_state_mass)
+        rnd = torch.cat((torch.rand(N, self.generator.nDimPhaseSpace()),
+                         x1_, x2_), axis=1)
+
+        momenta, weight, x1, x2 = self.generator.generateKinematics_batch(
+            self.E_cm, rnd, pdgs=self.initial_pdgs
+        )
+        #multiply x1,x2 trasformation jacobian to the weight
+        weight *= wx1x2.squeeze()
+
+        return rnd, momenta, weight, x1, x2
+
+
+    def get_momenta_from_ps(self, points):
+        pass

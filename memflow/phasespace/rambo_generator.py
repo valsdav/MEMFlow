@@ -147,7 +147,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             tf.convert_to_tensor(scale2, dtype=tf.float64),
         )
 
-        return torch.tensor(f.numpy(), dtype=torch.double, device=x.device) / x
+        return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
 
     def generateKinematics_batch(
         self,
@@ -374,9 +374,9 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             )
 
         weight = weight * factor2
-        # Additional weight factor 1/2s
-        shat = xb_1 * xb_2 * self.collider_energy**2
-        return output_returner_save, weight / (2 * shat), xb_1, xb_2
+        #  Do not add the additional weight factor 1/2s
+        # shat = xb_1 * xb_2 * self.collider_energy**2
+        return output_returner_save, weight, xb_1, xb_2
 
     def bisect_vec_batch(self, v_t, target=1.0e-16, maxLevel=600):
         """Solve v = (n+2) * u^(n+1) - (n+1) * u^(n+2) for u. Vectorized, batched"""
