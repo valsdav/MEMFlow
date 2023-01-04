@@ -58,6 +58,7 @@ class VirtualPhaseSpaceGenerator(object):
 
         raise NotImplementedError
 
+    @property
     def nDimPhaseSpace(self):
         """Return the number of random numbers required to produce
         a given multiplicity final state."""
@@ -237,7 +238,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                 * x_cut
             )
 
-        assert random_variables.shape[1] == self.nDimPhaseSpace()
+        assert random_variables.shape[1] == self.nDimPhaseSpace
 
         # The distribution weight of the generate PS point
         weight = torch.ones(
@@ -579,14 +580,16 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    def generatePSpoint_batch(self, E_cm, momenta_batch, pdgs=[0, 0]):
+    def getPSpoint_batch(self, E_cm, momenta_batch):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input
         """
+        n = self.n_final
         P = momenta_batch[:, 2:].clone()  # copy the final state particles
         # Check if we are in the CM
-        ref_lab = momenta_batch[:, 0, :] + momenta_batch[:, 0, :]
+        ref_lab = momenta_batch[:, 0, :] + momenta_batch[:, 1, :]
         if not ((rho2_t(ref_lab) == 0).any()):
+            print("boosting to CM")
             lab_boost = -boostVector_t(ref_lab)
             boost_tt(P, lab_boost.unsqueeze(1))
 
@@ -597,13 +600,13 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         M = torch.unsqueeze(M, 0).repeat(P.shape[0], 1)
         Q = torch.zeros_like(P)
         Q[:, -1] = P[:, -1]  # Qn = pn
-        n = self.n_final
+
         # intermediate mass
         for i in range(n, 0, -1):
             j = i - 1
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
-            M[:, j] -= torch.sum(final_masses[j:])
+            M[:, j] -= torch.sum(self.masses_t[j:])
 
         # output [0,1] distributed numbers
         r = torch.zeros(P.shape[0], self.nDimPhaseSpace)

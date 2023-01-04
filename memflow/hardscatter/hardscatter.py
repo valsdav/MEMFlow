@@ -18,9 +18,10 @@ def smatrix_ttH(pdgs, momenta):
     # transverse of the momenta for fortran ordering
     return ttH.smatrixhel(pdgs, proc_id, momenta, alphas, scale2, nhel)
 
+
 @numba.jit
 def eval_smatrix(pdgids, momenta):
-    inputs = np.transpose(momenta.numpy(), (0,2,1))
+    inputs = np.transpose(momenta.numpy(), (0, 2, 1))
     output = torch.zeros((momenta.shape[0]))
     for i in range(inputs.shape[0]):
         output[i] = smatrix_ttH(pdgids, inputs[i])
