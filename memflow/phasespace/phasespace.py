@@ -5,7 +5,7 @@ import tensorflow as tf
 from particle import Particle
 
 
-def get_pdfQ2(self, pdf, pdg, x, scale2):
+def get_pdfxQ2(pdf, pdg, x, scale2):
     """Call the PDF and return the corresponding density."""
     if pdf is None:
         return torch.ones_like(x)
@@ -20,6 +20,14 @@ def get_pdfQ2(self, pdf, pdg, x, scale2):
         tf.convert_to_tensor(scale2, dtype=tf.float64),
     )
     return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
+
+def get_pdf_weight(x1, x2, pdgs, pdf):
+    q2 = torch.ones_like(x1)*91.88**2
+    return torch.tensor(
+        (get_pdfxQ2(pdf, pdgs[0], x1, q2)*
+         get_pdfxQ2(pdf, pdgs[1], x2, q2)
+         ).numpy())
+    
 
 
 class PhaseSpace:
@@ -41,7 +49,10 @@ class PhaseSpace:
             tau=False,
         )
 
-    def generate_random_phase_space_points(self, N):
+    def generate_random_phase_space_points(self, N,
+                                           pT_mincut=-1,
+                                           delR_mincut=-1,
+                                           rap_maxcut=-1):
         '''
         Generate N random phase space points from the CM of E_cm energy,
         representing n final state particles with final_masses mass.
@@ -57,20 +68,30 @@ class PhaseSpace:
         points_out = torch.cat((ps_rand, x1x2_rand), axis=1)
 
         momenta, weight, x1, x2 = self.generator.generateKinematics_batch(
-            self.E_cm, rambo_input, pdgs=self.initial_pdgs
+            self.E_cm, rambo_input, pdgs=self.initial_pdgs,
+            pT_mincut=pT_mincut, delR_mincut=delR_mincut,
+            rap_maxcut=rap_maxcut
         )
         # multiply x1,x2 trasformation jacobian to the weight
         weight *= wx1x2.squeeze()
 
         return points_out, momenta, weight, x1, x2
 
-    def get_momenta_from_ps(self, points):
+    def get_momenta_from_ps(self, points,
+                            pT_mincut=-1,
+                            delR_mincut=-1,
+                            rap_maxcut=-1):
         # First of all get the transformed x1, x2 from the last two numbers
-        x1_, x2_, wx1x2 = self.get_x1x2_from_uniform(points[:, -2], points[:, -1])
-        rambo_input = torch.cat((points[:, :-2], x1_, x2_), axis=1)
+        x1_, x2_, wx1x2 = self.get_x1x2_from_uniform(points[:, -2:])
+
+        rambo_input = torch.cat((points[:, :-2],
+                                 x1_.unsqueeze(1),
+                                 x2_.unsqueeze(1)), axis=1)
 
         momenta, weight, x1, x2 = self.generator.generateKinematics_batch(
-            self.E_cm, rambo_input, pdgs=self.initial_pdgs
+            self.E_cm, rambo_input, pdgs=self.initial_pdgs,
+            pT_mincut=pT_mincut, delR_mincut=delR_mincut,
+            rap_maxcut=rap_maxcut
         )
         # multiply x1,x2 trasformation jacobian to the weight
         weight *= wx1x2.squeeze()

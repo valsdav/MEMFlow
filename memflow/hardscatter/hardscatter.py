@@ -2,6 +2,7 @@ import os
 import numpy as np
 from . import ttH
 import numba
+import torch
 
 param_card = os.path.join(os.path.dirname(__file__), "ttH", "param_card.dat")
 
@@ -23,5 +24,5 @@ def eval_smatrix_batch(pdgs, momenta):
     inputs = np.transpose(momenta.numpy(), (0,2,1))
     output = torch.zeros((momenta.shape[0]))
     for i in range(inputs.shape[0]):
-        output[i] = hardscatter.smatrix_ttH(pdgs, inputs[i])
+        output[i] = smatrix_ttH(pdgs, inputs[i])
     return output
