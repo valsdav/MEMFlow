@@ -17,11 +17,12 @@ class LossPlotter():
         self.output_dir = output_dir
         self.i = 0
         
-    def on_epoch_end(self, metrics:Dict):
+    def on_epoch_end(self, metrics:Dict, plot=True):
         for m,v in metrics.items():
             self.metrics[m].append(v)
         self.i += 1
-        self.performance_plot()
+        if plot:
+            self.performance_plot()
         # self.save_metrics()
 
     # def performance_save(self, logs):
@@ -35,7 +36,7 @@ class LossPlotter():
        
     def performance_plot(self):
         nrows = ceil(self.nmetrics/4)
-        self.figure, axs = plt.subplots(nrows, 4, figsize=(4*4,nrows*4), dpi=100)
+        self.figure, axs = plt.subplots(nrows, 4, figsize=(24,nrows*5), dpi=100)
         # self.figure.tight_layout()
         for il, l in enumerate(self.metrics.keys()):
             if nrows>1:
@@ -43,8 +44,8 @@ class LossPlotter():
             else:
                 ax = axs[il %4]
             ax.set_title(l)
-            ax.plot(list(range(1,self.i+1)), self.metrics[l], ".-", label=l)
-            if l == "loss":
+            ax.plot(np.arange(len(self.metrics[l])), self.metrics[l], ".-", label=l)
+            if "loss" in l:
                 ax.set_yscale("log")
             ax.set_xlabel("epochs")
             ax.legend()
