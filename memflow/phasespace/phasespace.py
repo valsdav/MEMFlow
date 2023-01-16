@@ -110,13 +110,13 @@ class PhaseSpace:
         in x1, x2 pairs keeping into account the minimum energy constraint
         given by E_cm and finalstate total mass.
         The jacobina factor the of the transformation is returned.'''
-        min_fract = self.final_state_mass / self.E_cm
+        min_fract = (self.final_state_mass / self.E_cm).to(x1.device)
         x1, dw1 = utils.uniform_distr(r[:, 0], min_fract, 1)
-        x2, dw2 = utils.uniform_distr_t(r[:, 1], min_fract / x1, torch.ones(r.shape[0]))
+        x2, dw2 = utils.uniform_distr_t(r[:, 1], min_fract / x1, torch.ones(r.shape[0], device=r.device))
         return x1, x2, dw1 * dw2
 
     def get_uniform_from_x1x2(self, x1, x2):
-        min_fract = self.final_state_mass / self.E_cm
+        min_fract = (self.final_state_mass / self.E_cm).to(x1.device)
         r1u = (x1 - min_fract) / (1 - min_fract)
         r2u = (x2 - (min_fract / x1)) / (1 - (min_fract / x1))
         return r1u, r2u
