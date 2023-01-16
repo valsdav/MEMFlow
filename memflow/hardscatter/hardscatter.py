@@ -21,8 +21,8 @@ def smatrix_ttH(pdgs, momenta):
 
 
 def eval_smatrix_batch(pdgs, momenta):
-    inputs = np.transpose(momenta.numpy(), (0,2,1))
+    inputs = np.transpose(momenta.cpu().numpy(), (0,2,1))
     output = torch.zeros((momenta.shape[0]))
     for i in range(inputs.shape[0]):
         output[i] = smatrix_ttH(pdgs, inputs[i])
-    return output
+    return output.to(momenta.device)
