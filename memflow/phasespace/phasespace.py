@@ -16,17 +16,16 @@ def get_pdfxQ2(pdf, pdg, x, scale2):
     # Call to lhapdf API
     f = pdf.xfxQ2(
         [pdg],
-        tf.convert_to_tensor(x, dtype=tf.float64),
-        tf.convert_to_tensor(scale2, dtype=tf.float64),
+        tf.convert_to_tensor(x.cpu(), dtype=tf.float64),
+        tf.convert_to_tensor(scale2.cpu(), dtype=tf.float64),
     )
     return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
 
 def get_pdf_weight(x1, x2, pdgs, pdf):
     q2 = torch.ones_like(x1)*91.88**2
-    return torch.tensor(
-        (get_pdfxQ2(pdf, pdgs[0], x1, q2)*
+    return get_pdfxQ2(pdf, pdgs[0], x1, q2)*\
          get_pdfxQ2(pdf, pdgs[1], x2, q2)
-         ).numpy())
+        
     
 
 
@@ -110,7 +109,7 @@ class PhaseSpace:
         in x1, x2 pairs keeping into account the minimum energy constraint
         given by E_cm and finalstate total mass.
         The jacobina factor the of the transformation is returned.'''
-        min_fract = (self.final_state_mass / self.E_cm).to(x1.device)
+        min_fract = (self.final_state_mass / self.E_cm).to(r.device)
         x1, dw1 = utils.uniform_distr(r[:, 0], min_fract, 1)
         x2, dw2 = utils.uniform_distr_t(r[:, 1], min_fract / x1, torch.ones(r.shape[0], device=r.device))
         return x1, x2, dw1 * dw2
