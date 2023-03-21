@@ -1,4 +1,4 @@
-from . import utils
+import utils
 import os
 import os.path
 import mplhep as hep
@@ -15,8 +15,13 @@ from matplotlib import colors
 import numpy as np
 torch.set_default_dtype(torch.double)
 
+# i want to get the two tops - one from semileptonic decay
+#  add partons and lepton partons
+# prov = 2
+#
 
-class Dataset_Partons(Dataset):
+
+class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "boost"], transform=None):
 
         self.fields = {

@@ -1,4 +1,4 @@
-from . import utils
+import utils
 import os
 import os.path
 import matplotlib.pyplot as plt
@@ -21,7 +21,7 @@ vector.register_awkward()
 hep.style.use(hep.style.ROOT)
 
 
-class Dataset_Jets(Dataset):
+class Dataset_RecoLevel(Dataset):
     def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], transform=None):
 
         self.fields = {
@@ -83,7 +83,7 @@ class Dataset_Jets(Dataset):
             boost_jets = utils.get_vector_sum(jets)
             boost = boost_jets + leptons + met
 
-        return boost_jets
+        return boost
 
     def boost_CM(self, objects_array, boost):
         objects_CM = objects_array.boost_p4(boost.neg3D)
