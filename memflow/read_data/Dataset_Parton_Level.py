@@ -34,14 +34,7 @@ class Dataset_PartonLevel(Dataset):
         self.transform = transform
         self.object_types = object_types
 
-        self.partons, self.leptons, self.generator = self.get_PartonsAndLeptons()
-
-        # if an object is missing (example: partons/boost => compute boost)
-        for object_type in self.object_types:
-            if not os.path.isfile(self.processed_file_names(object_type)):
-                print("File missing: compute boost")
-                self.boost = self.get_boost()
-                break
+        self.partons_boosted, self.leptons_boosted, self.generator, self.boost = self.get_PartonsAndLeptonsAndBoost()
 
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
@@ -65,25 +58,28 @@ class Dataset_PartonLevel(Dataset):
 
         return (self.root + '/processed_partons/' + type + '_data.pt')
 
-    def get_PartonsAndLeptons(self):
+    def get_PartonsAndLeptonsAndBoost(self):
         for file in self.raw_file_names:
             df = ak.from_parquet(file)
-
-            partons = df["partons"]
-            partons = ak.with_name(partons, name="Momentum4D")
-
-            leptons = df["lepton_partons"]
-            leptons = ak.with_name(leptons, name="Momentum4D")
 
             generator = df["generator_info"]
             generator = ak.with_name(generator, name="Momentum4D")
 
-        return partons, leptons, generator
+            boost = self.get_boost(generator)
 
-    def get_boost(self):
+            partons = df["partons"]
+            partons = ak.with_name(partons, name="Momentum4D")
+            partons_boosted = self.boost_CM(partons, boost)
+
+            leptons = df["lepton_partons"]
+            leptons = ak.with_name(leptons, name="Momentum4D")
+            leptons_boosted = self.boost_CM(leptons, boost)
+
+        return partons_boosted, leptons_boosted, generator, boost
+
+    def get_boost(self, generator):
 
         for file in self.raw_file_names:
-            generator = self.generator
 
             x1_numpy = generator.x1.to_numpy()
             x2_numpy = generator.x2.to_numpy()
@@ -131,12 +127,10 @@ class Dataset_PartonLevel(Dataset):
             if (object_type == "boost"):
                 objects = self.boost
 
-            elif (object_type == "partons" or object_type == "lepton_partons"):
-                if (object_type == "partons"):
-                    objects = self.partons
-                else:
-                    objects = self.leptons
-                objects = self.boost_CM(objects, self.boost)
+            elif (object_type == "partons"):
+                objects = self.partons_boosted
+            elif (object_type == "lepton_partons"):
+                objects = self.leptons_boosted
 
             if object_type == "partons":
                 objects = self.Reshape(objects, utils.struct_partons, 1)
@@ -162,8 +156,7 @@ class Dataset_PartonLevel(Dataset):
                        self.processed_file_names(object_type))
 
     def get_Higgs(self):
-        partons = self.partons
-        # NU UIT DE BOOST
+        partons = self.partons_boosted
 
         # find partons with provenance 1 (b from Higgs decay)
         prov1_partons = partons[partons.prov == 1]
@@ -173,7 +166,7 @@ class Dataset_PartonLevel(Dataset):
         return higgs
 
     def get_W_hadronic(self):
-        partons = self.partons
+        partons = self.partons_boosted
 
         # find partons with provenance 5 (quarks from W hadronic decay)
         prov5_partons = partons[partons.prov == 5]
@@ -183,7 +176,7 @@ class Dataset_PartonLevel(Dataset):
         return W
 
     def get_top_hadronic(self):
-        partons = self.partons
+        partons = self.partons_boosted
 
         # find partons with provenance 2 (b from top hadronic decay)
         prov2_partons = partons[partons.prov == 2]
@@ -193,7 +186,7 @@ class Dataset_PartonLevel(Dataset):
         return top_hadron
 
     def get_W_leptonic(self):
-        leptons = self.leptons
+        leptons = self.leptons_boosted
 
         # sum neutrino and lepton
         W = leptons[:, 0] + leptons[:, 1]
@@ -201,7 +194,7 @@ class Dataset_PartonLevel(Dataset):
         return W
 
     def get_top_leptonic(self):
-        partons = self.partons
+        partons = self.partons_boosted
 
         W = self.get_W_leptonic()
         # find partons with provenance 3 (b from top leptonic decay)
