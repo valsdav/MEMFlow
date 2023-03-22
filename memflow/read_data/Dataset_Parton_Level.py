@@ -15,19 +15,15 @@ from matplotlib import colors
 import numpy as np
 torch.set_default_dtype(torch.double)
 
-# i want to get the two tops - one from semileptonic decay
-#  add partons and lepton partons
-# prov = 2
-#
-
 
 class Dataset_PartonLevel(Dataset):
-    def __init__(self, root, object_types=["partons", "lepton_partons", "boost"], transform=None):
+    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "H_t_tbar"], transform=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
             "boost": ["x", "y", "z", "t"],
-            "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"]
+            "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"],
+            "H_t_tbar": ["rho", "eta", "phi", "tau"]
         }
 
         self.root = root
@@ -39,7 +35,10 @@ class Dataset_PartonLevel(Dataset):
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
                 print("Create new file for " + object_type)
-                self.process(object_type)
+                if object_type == "H_t_tbar":
+                    self.process_intermediateParticles()
+                else:
+                    self.process(object_type)
             else:
                 print(object_type + " file already exists")
 
@@ -49,6 +48,8 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("lepton_partons"))
         self.mask_boost, self.data_boost = torch.load(
             self.processed_file_names("boost"))
+        self.data_higgs_t_tbar = torch.load(
+            self.processed_file_names("H_t_tbar"))
 
     @property
     def raw_file_names(self):
@@ -69,10 +70,11 @@ class Dataset_PartonLevel(Dataset):
 
             partons = df["partons"]
             partons = ak.with_name(partons, name="Momentum4D")
-            partons_boosted = self.boost_CM(partons, boost)
 
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
+
+            partons_boosted = self.boost_CM(partons, boost)
             leptons_boosted = self.boost_CM(leptons, boost)
 
         return partons_boosted, leptons_boosted, generator, boost
@@ -88,7 +90,7 @@ class Dataset_PartonLevel(Dataset):
             E = (x1_numpy + x2_numpy) * 6500.0
             zeros = np.zeros(pz.shape)
 
-            boost = vector.array(
+            boost = ak.Array(
                 {
                     "x": zeros,
                     "y": zeros,
@@ -97,17 +99,21 @@ class Dataset_PartonLevel(Dataset):
                 }
             )
 
+            boost = ak.with_name(boost, name="Momentum4D")
+
         return boost
 
     def boost_CM(self, objects_array, boost):
+
         objects_CM = objects_array.boost_p4(boost.neg3D)
 
         # Overwriting old pt by calling the function on the boosted object
-        objects_CM["pt"] = objects_CM.pt
-        objects_CM["eta"] = objects_CM.eta
-        objects_CM["phi"] = objects_CM.phi
+        # overwrite objects_array because i dont like "objects_CM.type"
+        objects_array["pt"] = objects_CM.pt
+        objects_array["eta"] = objects_CM.eta
+        objects_array["phi"] = objects_CM.phi
 
-        return objects_CM
+        return objects_array
 
     def Reshape(self, input, value, ax):
         max_no = ak.max(ak.num(input, axis=ax))
@@ -121,6 +127,8 @@ class Dataset_PartonLevel(Dataset):
         return objects_array[:, :, 0] > 1e-5
 
     def process(self, object_type):
+
+        # Don't need to boost in CM frame because the partons/leptons are already boosted
 
         for file in self.raw_file_names:
 
@@ -155,6 +163,31 @@ class Dataset_PartonLevel(Dataset):
             torch.save((tensor_mask, tensor_data),
                        self.processed_file_names(object_type))
 
+    def process_intermediateParticles(self):
+        higgs = self.get_Higgs()
+        top_hadronic = self.get_top_hadronic()
+        top_leptonic = self.get_top_leptonic()
+
+        # Don't need to boost in CM frame because the partons/leptons are already boosted
+
+        intermediate = [higgs, top_hadronic, top_leptonic]
+
+        for i, objects in enumerate(intermediate):
+            d_list = utils.to_flat_numpy(
+                objects, self.fields["H_t_tbar"], axis=1, allow_missing=False)
+
+            d_list = np.expand_dims(d_list, axis=1)
+
+            if i == 0:
+                intermediate_np = d_list
+            else:
+                intermediate_np = np.concatenate(
+                    (intermediate_np, d_list), axis=1)
+
+        print(intermediate_np.shape)
+        tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
+        torch.save(tensor_data, self.processed_file_names("H_t_tbar"))
+
     def get_Higgs(self):
         partons = self.partons_boosted
 
@@ -181,7 +214,7 @@ class Dataset_PartonLevel(Dataset):
         # find partons with provenance 2 (b from top hadronic decay)
         prov2_partons = partons[partons.prov == 2]
         W = self.get_W_hadronic()
-        top_hadron = W + prov2_partons
+        top_hadron = W + prov2_partons[:, 0]
 
         return top_hadron
 
@@ -200,15 +233,18 @@ class Dataset_PartonLevel(Dataset):
         # find partons with provenance 3 (b from top leptonic decay)
         prov3_partons = partons[partons.prov == 3]
 
-        top_leptonic = W + prov3_partons
+        top_leptonic = W + prov3_partons[:, 0]
 
         return top_leptonic
+
+    def get_partons(self):
+        return self.partons_boosted
 
     def __getitem__(self, index):
 
         return (self.mask_partons[index], self.data_partons[index],
                 self.mask_lepton_partons[index], self.data_lepton_partons[index],
-                self.mask_boost[index], self.data_boost[index])
+                self.mask_boost[index], self.data_boost[index], self.data_higgs_t_tbar[index])
 
     def __len__(self):
         size = len(self.mask_partons)
