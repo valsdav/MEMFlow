@@ -1,4 +1,4 @@
-import utils
+from memflow.read_data import utils
 import os
 import os.path
 import matplotlib.pyplot as plt

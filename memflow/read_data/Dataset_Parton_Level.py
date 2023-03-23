@@ -1,4 +1,4 @@
-import utils
+from memflow.read_data import utils
 import os
 import os.path
 import mplhep as hep
@@ -17,13 +17,14 @@ torch.set_default_dtype(torch.double)
 
 
 class Dataset_PartonLevel(Dataset):
-    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "H_t_tbar"], transform=None):
+    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "H_t_tbar", "H_t_tbar_cartesian"], transform=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
             "boost": ["x", "y", "z", "t"],
             "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"],
-            "H_t_tbar": ["rho", "eta", "phi", "tau"]
+            "H_t_tbar": ["rho", "eta", "phi", "tau"],
+            "H_t_tbar_cartesian": ["px", "py", "pz", "E"]
         }
 
         self.root = root
@@ -37,6 +38,8 @@ class Dataset_PartonLevel(Dataset):
                 print("Create new file for " + object_type)
                 if object_type == "H_t_tbar":
                     self.process_intermediateParticles()
+                elif object_type == "H_t_tbar_cartesian":
+                    self.process_intermediateParticles_cartesian()
                 else:
                     self.process(object_type)
             else:
@@ -50,6 +53,8 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("boost"))
         self.data_higgs_t_tbar = torch.load(
             self.processed_file_names("H_t_tbar"))
+        self.data_higgs_t_tbar_cartesian = torch.load(
+            self.processed_file_names("H_t_tbar_cartesian"))
 
     @property
     def raw_file_names(self):
@@ -188,6 +193,54 @@ class Dataset_PartonLevel(Dataset):
         tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
         torch.save(tensor_data, self.processed_file_names("H_t_tbar"))
 
+    def process_intermediateParticles_cartesian(self):
+        higgs = self.get_Higgs()
+        top_hadronic = self.get_top_hadronic()
+        top_leptonic = self.get_top_leptonic()
+
+        # Don't need to boost in CM frame because the partons/leptons are already boosted
+        intermediate = [higgs, top_hadronic, top_leptonic]
+
+        for i, objects in enumerate(intermediate):
+
+            objects_cartesian = self.change_to_cartesianCoordinates(objects)
+
+            d_list = utils.to_flat_numpy(
+                objects_cartesian, self.fields["H_t_tbar_cartesian"], axis=1, allow_missing=False)
+
+            d_list = np.expand_dims(d_list, axis=1)
+
+            if i == 0:
+                intermediate_np = d_list
+            else:
+                intermediate_np = np.concatenate(
+                    (intermediate_np, d_list), axis=1)
+
+        print(intermediate_np.shape)
+        tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
+        torch.save(tensor_data, self.processed_file_names(
+            "H_t_tbar_cartesian"))
+
+    def change_to_cartesianCoordinates(self, objects):
+        px_numpy = objects.px.to_numpy()
+        py_numpy = objects.py.to_numpy()
+        pz_numpy = objects.pz.to_numpy()
+        E_numpy = objects.E.to_numpy()
+
+        objects_cartesian = ak.Array(
+            {
+                "px": px_numpy,
+                "py": py_numpy,
+                "pz": pz_numpy,
+                "E": E_numpy,
+            }
+        )
+
+        objects_cartesian = ak.with_name(
+            objects_cartesian, name="Momentum4D")
+
+        return objects_cartesian
+
     def get_Higgs(self):
         partons = self.partons_boosted
 
@@ -244,7 +297,8 @@ class Dataset_PartonLevel(Dataset):
 
         return (self.mask_partons[index], self.data_partons[index],
                 self.mask_lepton_partons[index], self.data_lepton_partons[index],
-                self.mask_boost[index], self.data_boost[index], self.data_higgs_t_tbar[index])
+                self.mask_boost[index], self.data_boost[index],
+                self.data_higgs_t_tbar[index], self.data_higgs_t_tbar_cartesian[index])
 
     def __len__(self):
         size = len(self.mask_partons)
