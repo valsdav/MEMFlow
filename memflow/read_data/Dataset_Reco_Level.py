@@ -1,15 +1,9 @@
 from memflow.read_data import utils
 import os
 import os.path
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 import torch
-import mplhep as hep
-from coffea.util import load
 import numpy as np
-import pandas as pd
 import awkward as ak
-from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
 from torch.utils.data import Dataset
 from numba import njit
 import vector
@@ -18,7 +12,6 @@ import numpy.ma as ma
 vector.register_numba()
 vector.register_awkward()
 
-hep.style.use(hep.style.ROOT)
 
 
 class Dataset_RecoLevel(Dataset):
@@ -27,11 +20,12 @@ class Dataset_RecoLevel(Dataset):
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
             "lepton_reco": ["pt", "eta", "phi", "m"],
-            "met": ["pt", "eta", "phi", "m"],
+            "met": ["pt", "eta", "phi"],
             "boost": ["x", "y", "z", "t"]
         }
 
         self.root = root
+        os.makedirs(self.root + "/processed_jets", exist_ok=True)
         self.transform = transform
         self.object_types = object_types
 
@@ -60,7 +54,7 @@ class Dataset_RecoLevel(Dataset):
 
     @property
     def raw_file_names(self):
-        return [self.root + '/all_jets_v6.parquet']
+        return [self.root + '/all_jets_v7.parquet']
 
     def processed_file_names(self, type):
 

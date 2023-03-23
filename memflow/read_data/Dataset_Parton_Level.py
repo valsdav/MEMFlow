@@ -1,7 +1,6 @@
 from memflow.read_data import utils
 import os
 import os.path
-import mplhep as hep
 import numpy.ma as ma
 import numba as nb
 from numba import njit
@@ -10,28 +9,31 @@ from torch.utils.data import Dataset
 import awkward as ak
 import vector
 import torch
-import matplotlib.pyplot as plt
-from matplotlib import colors
 import numpy as np
 torch.set_default_dtype(torch.double)
 
 
 class Dataset_PartonLevel(Dataset):
-    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "H_t_tbar", "H_t_tbar_cartesian"], transform=None):
+    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "incoming_particles_boost",
+                                           "H_t_tbar", "H_t_tbar_cartesian"], transform=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
-            "boost": ["x", "y", "z", "t"],
+            "boost": ["t", "x", "y", "z"],
+            "incoming_particles_boost": ["t", "x", "y", "z"],
             "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"],
-            "H_t_tbar": ["rho", "eta", "phi", "tau"],
-            "H_t_tbar_cartesian": ["px", "py", "pz", "E"]
+            "H_t_tbar": ["pt", "eta", "phi", "mass"],
+            "H_t_tbar_cartesian": ["E","px", "py", "pz"]
         }
 
         self.root = root
+        os.makedirs(self.root + "/processed_partons", exist_ok=True)
         self.transform = transform
         self.object_types = object_types
 
-        self.partons_boosted, self.leptons_boosted, self.generator, self.boost = self.get_PartonsAndLeptonsAndBoost()
+        (self.partons_boosted, self.leptons_boosted, 
+         self.higgs_boosted, self.generator, 
+         self.incoming_particles_boost , self.boost) = self.get_PartonsAndLeptonsAndBoost()
 
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
@@ -51,6 +53,8 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("lepton_partons"))
         self.mask_boost, self.data_boost = torch.load(
             self.processed_file_names("boost"))
+        self.mask_incoming_particles_boost, self.data_incoming_particles_boost = torch.load(
+            self.processed_file_names("incoming_particles_boost"))
         self.data_higgs_t_tbar = torch.load(
             self.processed_file_names("H_t_tbar"))
         self.data_higgs_t_tbar_cartesian = torch.load(
@@ -58,10 +62,9 @@ class Dataset_PartonLevel(Dataset):
 
     @property
     def raw_file_names(self):
-        return [self.root + '/all_jets_v6.parquet']
+        return [self.root + '/all_jets_v7.parquet']
 
     def processed_file_names(self, type):
-
         return (self.root + '/processed_partons/' + type + '_data.pt')
 
     def get_PartonsAndLeptonsAndBoost(self):
@@ -71,20 +74,30 @@ class Dataset_PartonLevel(Dataset):
             generator = df["generator_info"]
             generator = ak.with_name(generator, name="Momentum4D")
 
-            boost = self.get_boost(generator)
+            incoming_particles_boost = self.get_incoming_particles_boost(generator)
 
             partons = df["partons"]
             partons = ak.with_name(partons, name="Momentum4D")
+            
+            
+            gluon = partons[partons.prov==4]
+            gluon = self.Reshape(gluon, utils.struct_partons, 1)[:,0]
+            
+            boost = incoming_particles_boost - gluon
 
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
+            
+            higgs = df["higgs"]
+            higgs = ak.with_name(higgs, name="Momentum4D")
 
             partons_boosted = self.boost_CM(partons, boost)
             leptons_boosted = self.boost_CM(leptons, boost)
+            higgs_boosted = self.boost_CM(higgs, boost)
 
-        return partons_boosted, leptons_boosted, generator, boost
+        return partons_boosted, leptons_boosted, higgs_boosted, generator, incoming_particles_boost, boost, 
 
-    def get_boost(self, generator):
+    def get_incoming_particles_boost(self, generator):
 
         for file in self.raw_file_names:
 
@@ -139,7 +152,8 @@ class Dataset_PartonLevel(Dataset):
 
             if (object_type == "boost"):
                 objects = self.boost
-
+            elif (object_type == "incoming_particles_boost"):
+                objects = self.incoming_particles_boost
             elif (object_type == "partons"):
                 objects = self.partons_boosted
             elif (object_type == "lepton_partons"):
@@ -158,7 +172,7 @@ class Dataset_PartonLevel(Dataset):
                 else:
                     mask = np.ones((d_list.shape[0], d_list.shape[1]))
 
-            elif (object_type == "boost"):
+            elif (object_type in ["boost","incoming_particles_boost"]):
                 d_list = np.expand_dims(d_list, axis=1)
                 mask = np.ones((d_list.shape[0], d_list.shape[1]))
 
@@ -169,7 +183,7 @@ class Dataset_PartonLevel(Dataset):
                        self.processed_file_names(object_type))
 
     def process_intermediateParticles(self):
-        higgs = self.get_Higgs()
+        higgs = self.higgs_boosted
         top_hadronic = self.get_top_hadronic()
         top_leptonic = self.get_top_leptonic()
 
@@ -194,7 +208,7 @@ class Dataset_PartonLevel(Dataset):
         torch.save(tensor_data, self.processed_file_names("H_t_tbar"))
 
     def process_intermediateParticles_cartesian(self):
-        higgs = self.get_Higgs()
+        higgs = self.higgs_boosted
         top_hadronic = self.get_top_hadronic()
         top_leptonic = self.get_top_leptonic()
 
@@ -298,6 +312,7 @@ class Dataset_PartonLevel(Dataset):
         return (self.mask_partons[index], self.data_partons[index],
                 self.mask_lepton_partons[index], self.data_lepton_partons[index],
                 self.mask_boost[index], self.data_boost[index],
+                self.mask_incoming_particles_boost[index], self.data_incoming_particles_boost[index],
                 self.data_higgs_t_tbar[index], self.data_higgs_t_tbar_cartesian[index])
 
     def __len__(self):
