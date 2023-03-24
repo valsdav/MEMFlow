@@ -16,15 +16,15 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "incoming_particles_boost",
-                                           "H_t_tbar", "H_t_tbar_cartesian"], transform=None):
+                                           "H_thad_tlep", "H_thad_tlep_cartesian"], transform=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
             "boost": ["t", "x", "y", "z"],
             "incoming_particles_boost": ["t", "x", "y", "z"],
             "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"],
-            "H_t_tbar": ["pt", "eta", "phi", "mass"],
-            "H_t_tbar_cartesian": ["E", "px", "py", "pz"]
+            "H_thad_tlep": ["pt", "eta", "phi", "mass"],
+            "H_thad_tlep_cartesian": ["E", "px", "py", "pz"]
         }
 
         self.root = root
@@ -39,9 +39,9 @@ class Dataset_PartonLevel(Dataset):
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
                 print("Create new file for " + object_type)
-                if object_type == "H_t_tbar":
+                if object_type == "H_thad_tlep":
                     self.process_intermediateParticles()
-                elif object_type == "H_t_tbar_cartesian":
+                elif object_type == "H_thad_tlep_cartesian":
                     self.process_intermediateParticles_cartesian()
                 else:
                     self.process(object_type)
@@ -57,9 +57,9 @@ class Dataset_PartonLevel(Dataset):
         self.mask_incoming_particles_boost, self.data_incoming_particles_boost = torch.load(
             self.processed_file_names("incoming_particles_boost"))
         self.data_higgs_t_tbar = torch.load(
-            self.processed_file_names("H_t_tbar"))
+            self.processed_file_names("H_thad_tlep"))
         self.data_higgs_t_tbar_cartesian = torch.load(
-            self.processed_file_names("H_t_tbar_cartesian"))
+            self.processed_file_names("H_thad_tlep_cartesian"))
 
         self.get_PS_intermediateParticles()
         self.phasespace_intermediateParticles = torch.load(
@@ -88,8 +88,22 @@ class Dataset_PartonLevel(Dataset):
             gluon = partons[partons.prov == 4]
             gluon = self.Reshape(gluon, utils.struct_partons, 1)[:, 0]
 
-            boost = incoming_particles_boost - gluon
-
+            # For the moment, removing the additional gluon
+            # from the incoming particles momenta and from the final particle boost
+            gluon_xy = ak.Array(
+                {
+                    "x": gluon.px,
+                    "y": gluon.py,
+                    "z": np.zeros(len(gluon)),
+                    "t": (gluon.px**2 + gluon.py**2)**0.5
+                }
+            )
+            gluon_xy = ak.with_name(gluon_xy, name="Momentum4D")
+            
+            incoming_particles_boost["z"] = incoming_particles_boost["z"] - gluon.z
+            incoming_particles_boost["t"] = incoming_particles_boost["t"] - gluon.E
+            boost = incoming_particles_boost - gluon_xy #wrong
+            
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
 
@@ -198,7 +212,7 @@ class Dataset_PartonLevel(Dataset):
 
         for i, objects in enumerate(intermediate):
             d_list = utils.to_flat_numpy(
-                objects, self.fields["H_t_tbar"], axis=1, allow_missing=False)
+                objects, self.fields["H_thad_tlep"], axis=1, allow_missing=False)
 
             d_list = np.expand_dims(d_list, axis=1)
 
@@ -210,7 +224,7 @@ class Dataset_PartonLevel(Dataset):
 
         print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
-        torch.save(tensor_data, self.processed_file_names("H_t_tbar"))
+        torch.save(tensor_data, self.processed_file_names("H_thad_tlep"))
 
     def process_intermediateParticles_cartesian(self):
         higgs = self.higgs_boosted
@@ -225,7 +239,7 @@ class Dataset_PartonLevel(Dataset):
             objects_cartesian = self.change_to_cartesianCoordinates(objects)
 
             d_list = utils.to_flat_numpy(
-                objects_cartesian, self.fields["H_t_tbar_cartesian"], axis=1, allow_missing=False)
+                objects_cartesian, self.fields["H_thad_tlep_cartesian"], axis=1, allow_missing=False)
 
             d_list = np.expand_dims(d_list, axis=1)
 
@@ -238,7 +252,7 @@ class Dataset_PartonLevel(Dataset):
         print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
         torch.save(tensor_data, self.processed_file_names(
-            "H_t_tbar_cartesian"))
+            "H_thad_tlep_cartesian"))
 
     def get_PS_intermediateParticles(self):
 
