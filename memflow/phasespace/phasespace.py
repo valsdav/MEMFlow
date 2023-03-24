@@ -45,7 +45,7 @@ class PhaseSpace:
             self.final_masses,
             pdf=pdf,
             pdf_active=True,
-            tau=False,
+            uniform_x1x2=True,
         )
 
     def generate_random_phase_space_points(self, N,
@@ -57,65 +57,42 @@ class PhaseSpace:
         representing n final state particles with final_masses mass.
 
         '''
-        # Sampling correctly x1 and x2
-        x1x2_rand = torch.rand(N, 2)
-        x1_, x2_, wx1x2 = self.get_x1x2_from_uniform(x1x2_rand)
-        ps_rand = torch.rand(N, self.generator.nDimPhaseSpace)
-        # For rambo we need actual x1 x2
-        rambo_input = torch.cat((ps_rand, x1_.unsqueeze(1), x2_.unsqueeze(1)), axis=1)
+        ps_rand = torch.rand(N, self.generator.nDimPhaseSpace + 2)
         # for the output we return the [0,1] uniform x1x2 representation
-        points_out = torch.cat((ps_rand, x1x2_rand), axis=1)
-
         momenta, weight, x1, x2 = self.generator.generateKinematics_batch(
-            self.E_cm, rambo_input, pdgs=self.initial_pdgs,
+            self.E_cm, ps_rand, pdgs=self.initial_pdgs,
             pT_mincut=pT_mincut, delR_mincut=delR_mincut,
             rap_maxcut=rap_maxcut
         )
-        # multiply x1,x2 trasformation jacobian to the weight
-        weight *= wx1x2.squeeze()
+        return ps_rand, momenta, weight, x1, x2
 
-        return points_out, momenta, weight, x1, x2
-
-    def get_momenta_from_ps(self, points,
+    def get_momenta_from_ps(self,
+                            points, #(3n-4) + 2
                             pT_mincut=-1,
                             delR_mincut=-1,
                             rap_maxcut=-1):
-        # First of all get the transformed x1, x2 from the last two numbers
-        x1_, x2_, wx1x2 = self.get_x1x2_from_uniform(points[:, -2:])
+        '''
+        The returned 4-vector momenta are in order:
+        - gluon1, gluon2 in the CM (not in the lab frame!!)
+        - final state particles in the requested order
 
-        rambo_input = torch.cat((points[:, :-2],
-                                 x1_.unsqueeze(1),
-                                 x2_.unsqueeze(1)), axis=1)
-
+        Both the incoming and outgoing particles are in the CM to be able to
+        use the output of this transformation for Matrix Element computation. 
+        The x1 and x2 fractions are returned to build the lab frame boost.
+        '''
         momenta, weight, x1, x2 = self.generator.generateKinematics_batch(
-            self.E_cm, rambo_input, pdgs=self.initial_pdgs,
+            self.E_cm, points, pdgs=self.initial_pdgs,
             pT_mincut=pT_mincut, delR_mincut=delR_mincut,
             rap_maxcut=rap_maxcut
         )
-        # multiply x1,x2 trasformation jacobian to the weight
-        weight *= wx1x2.squeeze()
-
         return momenta, weight, x1, x2
 
     def get_ps_from_momenta(self, momenta, x1, x2):
-        ps = self.generator.getPSpoint_batch(self.E_cm, momenta)
-        # Getting x1x2 uniform space point
-        r1, r2 = self.get_uniform_from_x1x2(x1, x2)
+        ''' Momenta contains the two incoming particle 1 and 2 and the
+        final state particles in the correct order'''
+        ps = self.generator.getPSpoint_batch(momenta)
+        
+        r1r2 = utils.get_uniform_from_x1x2(x1, x2, self.final_state_mass, self.E_cm)
         # Concat at the end
-        return torch.cat((ps, r1.unsqueeze(1), r2.unsqueeze(1)), axis=1)
+        return torch.cat((ps, r1r2), axis=1)
 
-    def get_x1x2_from_uniform(self, r):
-        '''Transform a pair of uniformally distributed variables r (N,2),
-        in x1, x2 pairs keeping into account the minimum energy constraint
-        given by E_cm and finalstate total mass.
-        The jacobina factor the of the transformation is returned.'''
-        min_fract = (self.final_state_mass / self.E_cm).to(r.device)
-        x1, dw1 = utils.uniform_distr(r[:, 0], min_fract, 1)
-        x2, dw2 = utils.uniform_distr_t(r[:, 1], min_fract / x1, torch.ones(r.shape[0], device=r.device))
-        return x1, x2, dw1 * dw2
-
-    def get_uniform_from_x1x2(self, x1, x2):
-        min_fract = (self.final_state_mass / self.E_cm).to(x1.device)
-        r1u = (x1 - min_fract) / (1 - min_fract)
-        r2u = (x2 - (min_fract / x1)) / (1 - (min_fract / x1))
-        return r1u, r2u

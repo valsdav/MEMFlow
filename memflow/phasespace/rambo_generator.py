@@ -31,9 +31,18 @@ class VirtualPhaseSpaceGenerator(object):
         final_masses,
         pdf=None,
         pdf_active=False,
-        tau=True,
+        uniform_x1x2=True,
         lhapdf_dir=None,
     ):
+        '''
+        - pdf_active == True:  the energy of the center of mass is modelled by x1 and x2 fraction.
+        It is not always constant.
+
+        - pdf=None:  if the pdf object is none the pdfWeight is not computed
+
+        - uniform_x1x2: if True, two uniform numbers are given to model the x1 and x2 fraction.
+        They need to be converted to x1 and x2 from the uniform space
+        '''
 
         dev = (
             torch.device("cuda:" + str(0))
@@ -42,12 +51,13 @@ class VirtualPhaseSpaceGenerator(object):
         )
         self.initial_masses = initial_masses
         self.masses_t = final_masses.clone().to(dev)
+        self.tot_final_state_masses = torch.sum(self.masses_t)
         self.n_initial = len(initial_masses)
         self.n_final = len(final_masses)
 
         self.pdf = pdf
         self.pdf_active = pdf_active
-        self.tau = tau
+        self.uniform_x1x2 = uniform_x1x2
         if self.pdf_active:
             if lhapdf_dir not in sys.path:
                 sys.path.append(lhapdf_dir)
@@ -195,38 +205,25 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             random_variables = random_variables_full
         else:
             random_variables = random_variables_full[:, :-2]
-            if self.tau:
-                tot_final_state_masses = torch.sum(self.masses_t).tolist()
-                tau_min = (
-                    max(tot_final_state_masses, self.absolute_Ecm_min) / E_cm
-                ) ** 2 * torch.ones_like(random_variables_full[:, -1])
-                tau_max = torch.ones_like(random_variables_full[:, -1])
-                tau, wgt_jac1 = uniform_distr(
-                    random_variables_full[:, -2], tau_min, tau_max
-                )
 
-                ycm_min = 0.5 * torch.log(tau)
-                ycm_max = -ycm_min
-                ycm, wgt_jac2 = uniform_distr(
-                    random_variables_full[:, -1], ycm_min, ycm_max
-                )
-                xb_1 = torch.sqrt(tau) * torch.exp(ycm)
-                xb_2 = torch.sqrt(tau) * torch.exp(-ycm)
-
-                E_cm = torch.sqrt(tau) * E_cm
-                wgt_jac *= wgt_jac1 * wgt_jac2
+            if self.uniform_x1x2:
+                # Compute x1 and x2 from the uniform input random numbers
+                xb_1, xb_2 = get_x1x2_from_uniform(random_variables_full[:, -2:],
+                                                   self.tot_final_state_masses, E_cm)
+                # Computing the actual E_cm in the incoming particle restframe
+                E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
+                # wgt_jac *= wgt_jac1 * wgt_jac2
             else:
+                # Just consider the last two numbers the x1 and x2 fractions
                 xb_1 = random_variables_full[:, -2]
                 xb_2 = random_variables_full[:, -1]
+                # Computing the actual E_cm in the incoming particle restframe
                 E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
 
             # The original code was using the Z scale as Q^2 of the PDF
             p_energy = (torch.ones_like(xb_1) * (91.188) ** 2).to(
                 random_variables.device
             )
-            # I want to use the correct proton energy
-            # p1_energy=(torch.ones_like(xb_1)*(E_cm/2)**2).to(random_variables.device)
-            # p2_energy=(torch.ones_like(xb_2)*(E_cm/2)**2).to(random_variables.device)
 
             x_cut = torch.where(
                 xb_1 < 1e-4, torch.zeros_like(xb_1), torch.ones_like(xb_1)
@@ -580,19 +577,20 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    def getPSpoint_batch(self, E_cm, momenta_batch):
+    def getPSpoint_batch(self, momenta_batch):
         """Generate a self.n_final -> self.n_initial phase-space point
-        using the four momenta given in input
+        using the four momenta given in input.
+
+        Only the final particle momenta are given.
+        The Final state is assumed to be in the CM
         """
         n = self.n_final
-        P = momenta_batch[:, 2:].clone()  # copy the final state particles
+        P = momenta_batch.clone()  # copy the final state particles
         # Check if we are in the CM
-        ref_lab = momenta_batch[:, 0, :] + momenta_batch[:, 1, :]
-        if not ((rho2_t(ref_lab) == 0).any()):
-            print("boosting to CM")
-            lab_boost = -boostVector_t(ref_lab)
-            boost_tt(P, lab_boost.unsqueeze(1))
-
+        ref_lab = torch.sum(P, axis=1)
+        if not ((rho2_t(ref_lab) < 1e-3).any()):
+            raise Exception("Momenta batch not in the CM, failing to convert back to PS point")
+        
         # We start getting M and then K
         M = torch.tensor(
             [0.0] * n, requires_grad=False, dtype=torch.double, device=P.device

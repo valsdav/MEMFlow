@@ -242,3 +242,39 @@ def deltaR(inputt1, inputt2):
     delta_eta = pseudoRap(inputt1) - pseudoRap(inputt2)
     delta_phi = getdelphi(inputt1, inputt2)
     return torch.sqrt(delta_eta**2 + delta_phi**2)
+
+
+def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
+    def inverse_cdf(u, m, q): 
+        A = (m/2)*q**2 + q**2
+        return ( -q/A + torch.sqrt((-q/A)**2 +2*m*u/A))/(m/A)
+
+    logtau = np.log((final_state_mass / E_cm)**2)
+    m = -1
+    q = - logtau
+
+    minus_logx1 = inverse_cdf(unif[:,0], m, q)
+    # then sample -log(x2)
+    minus_logx2,_ = uniform_distr( unif[:,1], 0, m*minus_logx1 + q)
+
+    x1 = torch.exp(-minus_logx1)
+    x2 = torch.exp(-minus_logx2)
+    return x1, x2
+
+
+def get_uniform_from_x1x2(x1, x2, final_state_mass, E_cm):
+    def cdf(x, m, q):
+        A = (m/2)*q**2 + q**2  # normalization of the curve
+        ycum = ((m/2)*x**2 + q*x)/A
+        return ycum
+
+    logtau = np.log((final_state_mass / E_cm)**2)
+    m = -1
+    q = - logtau
+
+    mlogx1 = -torch.log(x1)
+    mlogx2 = -torch.log(x2)
+    
+    u_1 = cdf(mlogx1, m, q)
+    u_2 = mlogx2 / (m*mlogx1 + q)
+    return torch.cat((u_1.unsqueeze(1), u_2.unsqueeze(1)), axis=1)
