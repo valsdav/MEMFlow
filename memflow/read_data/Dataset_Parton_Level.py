@@ -100,9 +100,10 @@ class Dataset_PartonLevel(Dataset):
             )
             gluon_xy = ak.with_name(gluon_xy, name="Momentum4D")
             
-            incoming_particles_boost["z"] = incoming_particles_boost["z"] - gluon.z
-            incoming_particles_boost["t"] = incoming_particles_boost["t"] - gluon.E
-            boost = incoming_particles_boost - gluon_xy #wrong
+            # incoming_particles_boost["z"] = incoming_particles_boost["z"] - gluon.z
+            # incoming_particles_boost["t"] = incoming_particles_boost["t"] - gluon.z # this is the
+            incoming_particles_boost = incoming_particles_boost.boost_p4(-((gluon-gluon_xy)).neg3D)
+            boost = incoming_particles_boost - gluon_xy 
             
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
@@ -114,7 +115,7 @@ class Dataset_PartonLevel(Dataset):
             leptons_boosted = self.boost_CM(leptons, boost)
             higgs_boosted = self.boost_CM(higgs, boost)
 
-        return partons_boosted, leptons_boosted, higgs_boosted, generator, incoming_particles_boost, boost,
+        return partons_boosted, leptons_boosted, higgs_boosted, generator, incoming_particles_boost, boost
 
     def get_incoming_particles_boost(self, generator):
 
@@ -179,7 +180,7 @@ class Dataset_PartonLevel(Dataset):
                 objects = self.leptons_boosted
 
             if object_type == "partons":
-                objects = self.Reshape(objects, utils.struct_partons, 1)
+                 objects = self.Reshape(objects, utils.struct_partons, 1)
 
             d_list = utils.to_flat_numpy(
                 objects, self.fields[object_type], axis=1, allow_missing=False)
