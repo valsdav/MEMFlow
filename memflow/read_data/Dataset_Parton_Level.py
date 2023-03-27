@@ -77,7 +77,6 @@ class Dataset_PartonLevel(Dataset):
             df = ak.from_parquet(file)
 
             generator = df["generator_info"]
-            generator = ak.with_name(generator, name="Momentum4D")
 
             incoming_particles_boost = self.get_incoming_particles_boost(
                 generator)
@@ -88,23 +87,9 @@ class Dataset_PartonLevel(Dataset):
             gluon = partons[partons.prov == 4]
             gluon = self.Reshape(gluon, utils.struct_partons, 1)[:, 0]
 
-            # For the moment, removing the additional gluon
-            # from the incoming particles momenta and from the final particle boost
-            gluon_xy = ak.Array(
-                {
-                    "x": gluon.px,
-                    "y": gluon.py,
-                    "z": np.zeros(len(gluon)),
-                    "t": (gluon.px**2 + gluon.py**2)**0.5
-                }
-            )
-            gluon_xy = ak.with_name(gluon_xy, name="Momentum4D")
-            
-            # incoming_particles_boost["z"] = incoming_particles_boost["z"] - gluon.z
-            # incoming_particles_boost["t"] = incoming_particles_boost["t"] - gluon.z # this is the
-            incoming_particles_boost = incoming_particles_boost.boost_p4(-((gluon-gluon_xy)).neg3D)
-            boost = incoming_particles_boost - gluon_xy 
-            
+            boost = incoming_particles_boost - gluon
+            incoming_particles_boost = incoming_particles_boost - gluon
+
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
 
@@ -180,7 +165,7 @@ class Dataset_PartonLevel(Dataset):
                 objects = self.leptons_boosted
 
             if object_type == "partons":
-                 objects = self.Reshape(objects, utils.struct_partons, 1)
+                objects = self.Reshape(objects, utils.struct_partons, 1)
 
             d_list = utils.to_flat_numpy(
                 objects, self.fields[object_type], axis=1, allow_missing=False)
@@ -196,8 +181,8 @@ class Dataset_PartonLevel(Dataset):
                 d_list = np.expand_dims(d_list, axis=1)
                 mask = np.ones((d_list.shape[0], d_list.shape[1]))
 
-            tensor_data = torch.tensor(d_list, dtype=torch.float)
-            tensor_mask = torch.tensor(mask, dtype=torch.float)
+            tensor_data = torch.tensor(d_list)
+            tensor_mask = torch.tensor(mask)
 
             torch.save((tensor_mask, tensor_data),
                        self.processed_file_names(object_type))
@@ -224,7 +209,7 @@ class Dataset_PartonLevel(Dataset):
                     (intermediate_np, d_list), axis=1)
 
         print(intermediate_np.shape)
-        tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
+        tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names("H_thad_tlep"))
 
     def process_intermediateParticles_cartesian(self):
@@ -251,7 +236,7 @@ class Dataset_PartonLevel(Dataset):
                     (intermediate_np, d_list), axis=1)
 
         print(intermediate_np.shape)
-        tensor_data = torch.tensor(intermediate_np, dtype=torch.float)
+        tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names(
             "H_thad_tlep_cartesian"))
 
@@ -290,6 +275,9 @@ class Dataset_PartonLevel(Dataset):
 
         return objects_cartesian
 
+    def get_incoming_particles(self):
+        return self.incoming_particles_boost
+
     def get_Higgs(self):
         partons = self.partons_boosted
 
@@ -299,6 +287,9 @@ class Dataset_PartonLevel(Dataset):
         higgs = prov1_partons[:, 0] + prov1_partons[:, 1]
 
         return higgs
+
+    def get_Higgs_notFromDecay(self):
+        return self.higgs_boosted
 
     def get_W_hadronic(self):
         partons = self.partons_boosted
