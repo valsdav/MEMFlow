@@ -247,8 +247,8 @@ class Dataset_PartonLevel(Dataset):
         phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6])
 
         incoming_p_boost = self.data_boost
-        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 0]) / 2
-        x2 = (incoming_p_boost[:, 0, 3] - incoming_p_boost[:, 0, 3]) / 2
+        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / 2
+        x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / 2
 
         ps = phasespace.get_ps_from_momenta(
             self.data_higgs_t_tbar_ISR_cartesian, x1, x2)
