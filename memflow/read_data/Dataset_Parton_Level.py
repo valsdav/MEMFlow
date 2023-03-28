@@ -16,7 +16,7 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
-                                           "H_thad_tlep", "H_thad_tlep_cartesian"], transform=None):
+                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], transform=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -26,9 +26,6 @@ class Dataset_PartonLevel(Dataset):
             "H_thad_tlep_ISR": ["pt", "eta", "phi", "mass"],
             "H_thad_tlep_ISR_cartesian": ["E", "px", "py", "pz"]
         }
-
-        # keep gluon in the same data_intermediate
-        #
 
         self.root = root
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
@@ -42,9 +39,9 @@ class Dataset_PartonLevel(Dataset):
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
                 print("Create new file for " + object_type)
-                if object_type == "H_thad_tlep":
+                if object_type == "H_thad_tlep_ISR":
                     self.process_intermediateParticles()
-                elif object_type == "H_thad_tlep_cartesian":
+                elif object_type == "H_thad_tlep_ISR_cartesian":
                     self.process_intermediateParticles_cartesian()
                 else:
                     self.process(object_type)
@@ -244,7 +241,7 @@ class Dataset_PartonLevel(Dataset):
     def get_PS_intermediateParticles(self):
 
         E_CM = 13000
-        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6])
+        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21])
 
         incoming_p_boost = self.data_boost
         x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / 2
