@@ -245,13 +245,13 @@ def deltaR(inputt1, inputt2):
 
 
 def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
-    def inverse_cdf(u, m, q): 
-        A = (m/2)*q**2 + q**2
-        return ( -q/A + torch.sqrt((-q/A)**2 +2*m*u/A))/(m/A)
-
     logtau = np.log((final_state_mass / E_cm)**2)
     m = -1
     q = - logtau
+    A = (m/2)*q**2 + q**2
+
+    def inverse_cdf(u, m, q): 
+        return ( -q/A + torch.sqrt((-q/A)**2 +2*m*u/A))/(m/A)
 
     minus_logx1 = inverse_cdf(unif[:,0], m, q)
     # then sample -log(x2)
@@ -259,7 +259,9 @@ def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
 
     x1 = torch.exp(-minus_logx1)
     x2 = torch.exp(-minus_logx2)
-    return x1, x2
+
+    detjac = 1/(A*x1*x2)
+    return x1, x2, detjac
 
 
 def get_uniform_from_x1x2(x1, x2, final_state_mass, E_cm):
@@ -270,7 +272,7 @@ def get_uniform_from_x1x2(x1, x2, final_state_mass, E_cm):
 
     logtau = np.log((final_state_mass / E_cm)**2)
     m = -1
-    q = - logtau
+    q = -logtau
 
     mlogx1 = -torch.log(x1)
     mlogx2 = -torch.log(x2)

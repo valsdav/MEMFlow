@@ -5,12 +5,7 @@ import torch
 import numpy as np
 import awkward as ak
 from torch.utils.data import Dataset
-from numba import njit
-import vector
-import numba as nb
-import numpy.ma as ma
-vector.register_numba()
-vector.register_awkward()
+
 
 
 
@@ -19,7 +14,7 @@ class Dataset_RecoLevel(Dataset):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
-            "lepton_reco": ["pt", "eta", "phi", "m"],
+            "lepton_reco": ["pt", "eta", "phi"],
             "met": ["pt", "eta", "phi"],
             "boost": ["x", "y", "z", "t"]
         }
@@ -54,7 +49,7 @@ class Dataset_RecoLevel(Dataset):
 
     @property
     def raw_file_names(self):
-        return [self.root + '/all_jets_v7.parquet']
+        return [self.root + '/all_jets.parquet']
 
     def processed_file_names(self, type):
 

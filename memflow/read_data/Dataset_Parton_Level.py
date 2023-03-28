@@ -3,15 +3,14 @@ from memflow.phasespace.phasespace import PhaseSpace
 import os
 import os.path
 import numpy.ma as ma
-import numba as nb
-from numba import njit
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import awkward as ak
-import vector
+
 import torch
 import numpy as np
 torch.set_default_dtype(torch.double)
+
 
 
 class Dataset_PartonLevel(Dataset):
@@ -65,7 +64,7 @@ class Dataset_PartonLevel(Dataset):
 
     @property
     def raw_file_names(self):
-        return [self.root + '/all_jets_v7.parquet']
+        return [self.root + '/all_jets.parquet']
 
     def processed_file_names(self, type):
         return (self.root + '/processed_partons/' + type + '_data.pt')
@@ -244,9 +243,8 @@ class Dataset_PartonLevel(Dataset):
         phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21])
 
         incoming_p_boost = self.data_boost
-        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / 2
-        x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / 2
-
+        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / E_CM
+        x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / E_CM
         ps = phasespace.get_ps_from_momenta(
             self.data_higgs_t_tbar_ISR_cartesian, x1, x2)
 

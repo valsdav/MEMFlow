@@ -208,11 +208,11 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
 
             if self.uniform_x1x2:
                 # Compute x1 and x2 from the uniform input random numbers
-                xb_1, xb_2 = get_x1x2_from_uniform(random_variables_full[:, -2:],
+                xb_1, xb_2, wgt_jac_x1x2 = get_x1x2_from_uniform(random_variables_full[:, -2:],
                                                    self.tot_final_state_masses, E_cm)
                 # Computing the actual E_cm in the incoming particle restframe
                 E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
-                # wgt_jac *= wgt_jac1 * wgt_jac2
+                wgt_jac *= wgt_jac_x1x2
             else:
                 # Just consider the last two numbers the x1 and x2 fractions
                 xb_1 = random_variables_full[:, -2]

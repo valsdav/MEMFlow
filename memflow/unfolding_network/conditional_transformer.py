@@ -1,30 +1,9 @@
-from torch.utils.data import Dataset
-from tqdm import tqdm
 import torch.nn as nn
-import os
-from pprint import pprint
 import torch
-import hist
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-import mplhep as hep
-from coffea.util import load
 import numpy as np
-import pandas as pd
-import awkward as ak
-from coffea.nanoevents import NanoEventsFactory, NanoAODSchema
-from numba import njit
-import vector
-import numba as nb
-import numpy.ma as ma
-vector.register_numba()
-vector.register_awkward()
 
 
-hep.style.use(hep.style.ROOT)
-
-
-class ConditioningTransformerLayer():
+class ConditioningTransformerLayer(nn.Module):
     def __init__(self, jets_features, lepton_features, out_features, nhead, no_layers):
         super().__init__()
 
@@ -32,9 +11,9 @@ class ConditioningTransformerLayer():
                                  out_features=out_features - 1, dtype=torch.float32)
         self.lin_lept = nn.Linear(in_features=lepton_features,
                                   out_features=out_features - 1, dtype=torch.float32)
-        self.lin_met = nn.Linear(in_features=lepton_features,
+        self.lin_met = nn.Linear(in_features=3,
                                  out_features=out_features - 1, dtype=torch.float32)
-        self.lin_boost = nn.Linear(in_features=lepton_features,
+        self.lin_boost = nn.Linear(in_features=4,
                                    out_features=out_features - 1, dtype=torch.float32)
 
         self.gelu = nn.GELU()
@@ -83,9 +62,13 @@ class ConditioningTransformerLayer():
 
         # `computing ther average of not masked objects`
         transformer_output_sum = torch.sum(
-            transformer_output * torch.unsqueeze(transformer_mask, -1), dim=1)
-        N_valid_objects = torch.sum(transformer_mask, dim=1)
+            transformer_output * torch.unsqueeze(transformer_mask, -1), dim=1)  #[B, 64]
+        
+        N_valid_objects = torch.sum(transformer_mask, dim=1).unsqueeze(1)  #[B, 1]
 
         conditional_input = transformer_output_sum / N_valid_objects
 
-        return torch.cat((batch_boost[:, :, 3:4].squeeze(1), conditional_input), dim=1)
+        x1 = (batch_boost[:, :, 3] + batch_boost[:, :, 2]) / 13000.
+        x2 = (batch_boost[:, :, 3] - batch_boost[:, :, 2]) / 13000.
+        
+        return torch.cat((x1, x2,conditional_input), dim=1)

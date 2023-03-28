@@ -1,13 +1,12 @@
-from torch.nn import Linear, Parameter
 import torch
-import hist
-from pprint import pprint
 import numpy as np
-import pandas as pd
-import awkward as ak
+import numba
 from numba import njit
+import awkward as ak
 import vector
-import numba as nb
+vector.register_awkward()
+vector.register_numba()
+
 import numpy.ma as ma
 from torch.utils.data import DataLoader
 
