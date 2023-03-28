@@ -15,7 +15,7 @@ torch.set_default_dtype(torch.double)
 
 
 class Dataset_PartonLevel(Dataset):
-    def __init__(self, root, object_types=["partons", "lepton_partons", "boost", "incoming_particles_boost",
+    def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
                                            "H_thad_tlep", "H_thad_tlep_cartesian"], transform=None):
 
         self.fields = {
@@ -23,9 +23,12 @@ class Dataset_PartonLevel(Dataset):
             "boost": ["t", "x", "y", "z"],
             "incoming_particles_boost": ["t", "x", "y", "z"],
             "lepton_partons": ["pt", "eta", "phi", "mass", "pdgId"],
-            "H_thad_tlep": ["pt", "eta", "phi", "mass"],
-            "H_thad_tlep_cartesian": ["E", "px", "py", "pz"]
+            "H_thad_tlep_ISR": ["pt", "eta", "phi", "mass"],
+            "H_thad_tlep_ISR_cartesian": ["E", "px", "py", "pz"]
         }
+
+        # keep gluon in the same data_intermediate
+        #
 
         self.root = root
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
@@ -34,7 +37,7 @@ class Dataset_PartonLevel(Dataset):
 
         (self.partons_boosted, self.leptons_boosted,
          self.higgs_boosted, self.generator,
-         self.incoming_particles_boost, self.boost) = self.get_PartonsAndLeptonsAndBoost()
+         self.gluon_ISR, self.boost) = self.get_PartonsAndLeptonsAndBoost()
 
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
@@ -54,12 +57,10 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("lepton_partons"))
         self.mask_boost, self.data_boost = torch.load(
             self.processed_file_names("boost"))
-        self.mask_incoming_particles_boost, self.data_incoming_particles_boost = torch.load(
-            self.processed_file_names("incoming_particles_boost"))
-        self.data_higgs_t_tbar = torch.load(
-            self.processed_file_names("H_thad_tlep"))
-        self.data_higgs_t_tbar_cartesian = torch.load(
-            self.processed_file_names("H_thad_tlep_cartesian"))
+        self.data_higgs_t_tbar_ISR = torch.load(
+            self.processed_file_names("H_thad_tlep_ISR"))
+        self.data_higgs_t_tbar_ISR_cartesian = torch.load(
+            self.processed_file_names("H_thad_tlep_ISR_cartesian"))
 
         self.get_PS_intermediateParticles()
         self.phasespace_intermediateParticles = torch.load(
@@ -81,14 +82,13 @@ class Dataset_PartonLevel(Dataset):
             incoming_particles_boost = self.get_incoming_particles_boost(
                 generator)
 
+            boost = incoming_particles_boost
+
             partons = df["partons"]
             partons = ak.with_name(partons, name="Momentum4D")
 
             gluon = partons[partons.prov == 4]
             gluon = self.Reshape(gluon, utils.struct_partons, 1)[:, 0]
-
-            boost = incoming_particles_boost - gluon
-            incoming_particles_boost = incoming_particles_boost - gluon
 
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
@@ -99,8 +99,9 @@ class Dataset_PartonLevel(Dataset):
             partons_boosted = self.boost_CM(partons, boost)
             leptons_boosted = self.boost_CM(leptons, boost)
             higgs_boosted = self.boost_CM(higgs, boost)
+            gluon_ISR_boosted = self.boost_CM(gluon, boost)
 
-        return partons_boosted, leptons_boosted, higgs_boosted, generator, incoming_particles_boost, boost
+        return partons_boosted, leptons_boosted, higgs_boosted, generator, gluon_ISR_boosted, boost
 
     def get_incoming_particles_boost(self, generator):
 
@@ -157,8 +158,6 @@ class Dataset_PartonLevel(Dataset):
 
             if (object_type == "boost"):
                 objects = self.boost
-            elif (object_type == "incoming_particles_boost"):
-                objects = self.incoming_particles_boost
             elif (object_type == "partons"):
                 objects = self.partons_boosted
             elif (object_type == "lepton_partons"):
@@ -177,7 +176,7 @@ class Dataset_PartonLevel(Dataset):
                 else:
                     mask = np.ones((d_list.shape[0], d_list.shape[1]))
 
-            elif (object_type in ["boost", "incoming_particles_boost"]):
+            elif (object_type in ["boost"]):
                 d_list = np.expand_dims(d_list, axis=1)
                 mask = np.ones((d_list.shape[0], d_list.shape[1]))
 
@@ -191,14 +190,15 @@ class Dataset_PartonLevel(Dataset):
         higgs = self.higgs_boosted
         top_hadronic = self.get_top_hadronic()
         top_leptonic = self.get_top_leptonic()
+        gluon_ISR = self.gluon_ISR
 
         # Don't need to boost in CM frame because the partons/leptons are already boosted
 
-        intermediate = [higgs, top_hadronic, top_leptonic]
+        intermediate = [higgs, top_hadronic, top_leptonic, gluon_ISR]
 
         for i, objects in enumerate(intermediate):
             d_list = utils.to_flat_numpy(
-                objects, self.fields["H_thad_tlep"], axis=1, allow_missing=False)
+                objects, self.fields["H_thad_tlep_ISR"], axis=1, allow_missing=False)
 
             d_list = np.expand_dims(d_list, axis=1)
 
@@ -210,22 +210,23 @@ class Dataset_PartonLevel(Dataset):
 
         print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np)
-        torch.save(tensor_data, self.processed_file_names("H_thad_tlep"))
+        torch.save(tensor_data, self.processed_file_names("H_thad_tlep_ISR"))
 
     def process_intermediateParticles_cartesian(self):
         higgs = self.higgs_boosted
         top_hadronic = self.get_top_hadronic()
         top_leptonic = self.get_top_leptonic()
+        gluon_ISR = self.gluon_ISR
 
         # Don't need to boost in CM frame because the partons/leptons are already boosted
-        intermediate = [higgs, top_hadronic, top_leptonic]
+        intermediate = [higgs, top_hadronic, top_leptonic, gluon_ISR]
 
         for i, objects in enumerate(intermediate):
 
             objects_cartesian = self.change_to_cartesianCoordinates(objects)
 
             d_list = utils.to_flat_numpy(
-                objects_cartesian, self.fields["H_thad_tlep_cartesian"], axis=1, allow_missing=False)
+                objects_cartesian, self.fields["H_thad_tlep_ISR_cartesian"], axis=1, allow_missing=False)
 
             d_list = np.expand_dims(d_list, axis=1)
 
@@ -238,19 +239,19 @@ class Dataset_PartonLevel(Dataset):
         print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names(
-            "H_thad_tlep_cartesian"))
+            "H_thad_tlep_ISR_cartesian"))
 
     def get_PS_intermediateParticles(self):
 
         E_CM = 13000
         phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6])
 
-        incoming_p_boost = self.data_incoming_particles_boost.squeeze()
-        x1 = (incoming_p_boost[:, 0] + incoming_p_boost[:, 2]) / 2
-        x2 = (incoming_p_boost[:, 0] - incoming_p_boost[:, 2]) / 2
+        incoming_p_boost = self.data_boost
+        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 0]) / 2
+        x2 = (incoming_p_boost[:, 0, 3] - incoming_p_boost[:, 0, 3]) / 2
 
         ps = phasespace.get_ps_from_momenta(
-            self.data_higgs_t_tbar_cartesian, x1, x2)
+            self.data_higgs_t_tbar_ISR_cartesian, x1, x2)
 
         torch.save(ps, self.processed_file_names(
             "phasespace_intermediateParticles"))
@@ -275,9 +276,6 @@ class Dataset_PartonLevel(Dataset):
 
         return objects_cartesian
 
-    def get_incoming_particles(self):
-        return self.incoming_particles_boost
-
     def get_Higgs(self):
         partons = self.partons_boosted
 
@@ -287,9 +285,6 @@ class Dataset_PartonLevel(Dataset):
         higgs = prov1_partons[:, 0] + prov1_partons[:, 1]
 
         return higgs
-
-    def get_Higgs_notFromDecay(self):
-        return self.higgs_boosted
 
     def get_W_hadronic(self):
         partons = self.partons_boosted
@@ -330,16 +325,12 @@ class Dataset_PartonLevel(Dataset):
 
         return top_leptonic
 
-    def get_partons(self):
-        return self.partons_boosted
-
     def __getitem__(self, index):
 
         return (self.mask_partons[index], self.data_partons[index],
                 self.mask_lepton_partons[index], self.data_lepton_partons[index],
                 self.mask_boost[index], self.data_boost[index],
-                self.mask_incoming_particles_boost[index], self.data_incoming_particles_boost[index],
-                self.data_higgs_t_tbar[index], self.data_higgs_t_tbar_cartesian[index],
+                self.data_higgs_t_tbar_ISR[index], self.data_higgs_t_tbar_ISR_cartesian[index],
                 self.phasespace_intermediateParticles[index])
 
     def __len__(self):
