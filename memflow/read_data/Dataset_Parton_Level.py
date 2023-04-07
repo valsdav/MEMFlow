@@ -61,6 +61,8 @@ class Dataset_PartonLevel(Dataset):
         self.get_PS_intermediateParticles()
         self.phasespace_intermediateParticles = torch.load(
             self.processed_file_names("phasespace_intermediateParticles"))
+        self.phasespace_rambo_detjacobian = torch.load(
+            self.processed_file_names("phasespace_rambo_detjacobian"))
 
     @property
     def raw_file_names(self):
@@ -240,17 +242,19 @@ class Dataset_PartonLevel(Dataset):
     def get_PS_intermediateParticles(self):
 
         E_CM = 13000
-        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21])
+        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21], dev="cpu")
 
         incoming_p_boost = self.data_boost
         x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / E_CM
         x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / E_CM
-        ps = phasespace.get_ps_from_momenta(
+        ps, detjinv = phasespace.get_ps_from_momenta(
             self.data_higgs_t_tbar_ISR_cartesian, x1, x2)
-
+    
         torch.save(ps, self.processed_file_names(
             "phasespace_intermediateParticles"))
-
+        torch.save(detjinv, self.processed_file_names("phasespace_rambo_detjacobian"))
+        
+        
     def change_to_cartesianCoordinates(self, objects):
         px_numpy = objects.px.to_numpy()
         py_numpy = objects.py.to_numpy()
@@ -326,7 +330,8 @@ class Dataset_PartonLevel(Dataset):
                 self.mask_lepton_partons[index], self.data_lepton_partons[index],
                 self.mask_boost[index], self.data_boost[index],
                 self.data_higgs_t_tbar_ISR[index], self.data_higgs_t_tbar_ISR_cartesian[index],
-                self.phasespace_intermediateParticles[index])
+                self.phasespace_intermediateParticles[index],
+                self.phasespace_rambo_detjacobian[index])
 
     def __len__(self):
         size = len(self.mask_partons)
