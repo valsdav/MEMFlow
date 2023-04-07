@@ -29,6 +29,7 @@ class VirtualPhaseSpaceGenerator(object):
         self,
         initial_masses,
         final_masses,
+        collider_energy,
         pdf=None,
         pdf_active=False,
         uniform_x1x2=True,
@@ -54,6 +55,7 @@ class VirtualPhaseSpaceGenerator(object):
         self.tot_final_state_masses = torch.sum(self.masses_t)
         self.n_initial = len(initial_masses)
         self.n_final = len(final_masses)
+        self.collider_energy = collider_energy
 
         self.pdf = pdf
         self.pdf_active = pdf_active
@@ -162,7 +164,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
 
     def generateKinematics_batch(
         self,
-        E_cm,
         random_variables_full,
         pT_mincut=-1,
         delR_mincut=-1,
@@ -170,11 +171,18 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         pdgs=[0, 0],
     ):
         """Generate a self.n_initial -> self.n_final phase-space point
-        using the random variables passed in argument, including phase space cuts and PDFs
+        using the random variables passed in argument, including phase space cuts and PDFs.
+
+        The function returns the four momenta of incoming and outcoming particle
+        in the CM, a weights, and the x1 and x2 fractions in the lab.
+
+        The weight is the determinant of the Rambo function from uniform
+        space to the parton space.
+        The probability density of the partons is then 1/weight as the weight is
+        |detRambo(uniform)|. 
 
         """
         self.masses_t = self.masses_t.to(random_variables_full.device)
-        self.collider_energy = E_cm
         # Make sure that none of the random_variables is NaN.
         if (
             torch.is_tensor(random_variables_full)
@@ -209,16 +217,17 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             if self.uniform_x1x2:
                 # Compute x1 and x2 from the uniform input random numbers
                 xb_1, xb_2, wgt_jac_x1x2 = get_x1x2_from_uniform(random_variables_full[:, -2:],
-                                                   self.tot_final_state_masses, E_cm)
+                                                                 self.tot_final_state_masses, self.collider_energy)
                 # Computing the actual E_cm in the incoming particle restframe
-                E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
+                E_cm = torch.sqrt(xb_1 * xb_2) * self.collider_energy
+                # the get_x1x2_from_uniform return the weight, 1/detjac_inv
                 wgt_jac *= wgt_jac_x1x2
             else:
                 # Just consider the last two numbers the x1 and x2 fractions
                 xb_1 = random_variables_full[:, -2]
                 xb_2 = random_variables_full[:, -1]
                 # Computing the actual E_cm in the incoming particle restframe
-                E_cm = torch.sqrt(xb_1 * xb_2) * E_cm
+                E_cm = torch.sqrt(xb_1 * xb_2) * self.collider_energy
 
             # The original code was using the Z scale as Q^2 of the PDF
             p_energy = (torch.ones_like(xb_1) * (91.188) ** 2).to(
@@ -373,6 +382,8 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
 
         weight = weight * factor2
         # Add the additional weight factor 1/2s
+        # We don't add it here because it is not part of the rambo
+        # transformation
         # shat = xb_1 * xb_2 * self.collider_energy**2
         return output_returner_save, weight, xb_1, xb_2
 
@@ -451,6 +462,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             torch.cumsum(torch.flip(self.masses_t, (-1,)), -1), (-1,)
         )
         M += masses_sum[:-1].to(M.device)
+
         weight[:] *= 8.0 * self.rho(
             M[:, self.n_final - 2],
             self.masses_t[self.n_final - 1],
@@ -577,7 +589,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    def getPSpoint_batch(self, momenta_batch):
+    def getPSpoint_batch(self, momenta_batch, x1, x2):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input.
 
@@ -586,6 +598,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         """
         n = self.n_final
         P = momenta_batch.clone()  # copy the final state particles
+        
         # Check if we are in the CM
         ref_lab = torch.sum(P, axis=1)
         if not ((rho2_t(ref_lab) < 1e-3).any()):
@@ -596,6 +609,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             [0.0] * n, requires_grad=False, dtype=torch.double, device=P.device
         )
         M = torch.unsqueeze(M, 0).repeat(P.shape[0], 1)
+        K_t = M.clone()
         Q = torch.zeros_like(P)
         Q[:, -1] = P[:, -1]  # Qn = pn
 
@@ -604,7 +618,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             j = i - 1
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
-            M[:, j] -= torch.sum(self.masses_t[j:])
+            K_t[:, j] = M[:,j] - torch.sum(self.masses_t[j:])
 
         # output [0,1] distributed numbers
         r = torch.zeros(P.shape[0], self.nDimPhaseSpace)
@@ -612,7 +626,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         for i in range(n, 1, -1):
             j = i - 1  # index for 0-based tensors
             # in the direct algo the u are squared.
-            u = (M[:, j] / M[:, j - 1]) ** 2
+            u = (K_t[:, j] / K_t[:, j - 1]) ** 2
 
             r[:, j - 1] = (n + 1 - i) * (torch.pow(u, (n - i))) - (n - i) * (
                 torch.pow(u, (n + 1 - i))
@@ -637,4 +651,41 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             phi += deltaphi
             r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
 
-        return r
+
+        # Get uniform from x1x2 space
+        r1r2, jacinv_x1x2 = get_uniform_from_x1x2(x1, x2, self.tot_final_state_masses, self.collider_energy)
+        Ecm_byev =  torch.sqrt(x1 * x2) * self.collider_energy
+        
+        # Get the Rambo weight
+        # massless weight
+        # This is needed to have the same formula as the direct
+        M = M[:, :-1]
+        K_t = K_t[:,:-1]
+        rambo_jac = self.get_flatWeights(Ecm_byev, self.n_final)
+        # Now for the mass case
+        rambo_jac[:] *= 8.0 * self.rho(
+            M[:, self.n_final - 2],
+            self.masses_t[self.n_final - 1],
+            self.masses_t[self.n_final - 2],
+        )
+        rambo_jac[:] *= torch.prod(
+            (
+                self.rho(
+                    M[:, : self.n_final - 2],
+                    M[:, 1:],
+                    self.masses_t[: self.n_final - 2].to(M.device),
+                )
+                / self.rho(K_t[:, : self.n_final - 2], K_t[:, 1:], 0.0)
+            )
+            * (M[:, 1 : self.n_final - 1] / K_t[:, 1 : self.n_final - 1]),
+            -1,
+        )
+
+        rambo_jac[:] *= torch.pow(K_t[:, 0] / M[:, 0], 2 * self.n_final - 4)
+
+        # The probability if |detJac Rambo^-1| = 1/ |detJac Rambo| = 1 / weight
+        prob = 1/rambo_jac
+        # Adding the jac of the inverse x1x2 transformation
+        prob *= jacinv_x1x2
+        
+        return torch.cat((r, r1r2), axis=1), prob

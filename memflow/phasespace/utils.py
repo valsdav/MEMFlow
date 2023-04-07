@@ -245,6 +245,11 @@ def deltaR(inputt1, inputt2):
 
 
 def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
+    ''' The function transform [0,1] uniform space
+    to x1 and x2 fraction in the lab frame respecting the
+    E_cm constraint.
+    It returns also a weight, that corresponds to 1/probabilty.
+    = 1/ |detJacInverse(x1,x2)|'''
     logtau = np.log((final_state_mass / E_cm)**2)
     m = -1
     q = - logtau
@@ -260,23 +265,31 @@ def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
     x1 = torch.exp(-minus_logx1)
     x2 = torch.exp(-minus_logx2)
 
-    detjac = 1/(A*x1*x2)
-    return x1, x2, detjac
+    detjacinv = 1/(A*x1*x2)  # det jac of inverse function to get p(x1)
+    weight = 1 / detjacinv
+    return x1, x2, weight
 
 
 def get_uniform_from_x1x2(x1, x2, final_state_mass, E_cm):
-    def cdf(x, m, q):
-        A = (m/2)*q**2 + q**2  # normalization of the curve
-        ycum = ((m/2)*x**2 + q*x)/A
-        return ycum
+    '''The function transform the x1, x2 lab frame fractions
+    to the uniform [0,1] space.
+    It returns the detJacInverse function that correspond to the probability
+    of x1, x2'''
 
     logtau = np.log((final_state_mass / E_cm)**2)
     m = -1
     q = -logtau
+    A = (m/2)*q**2 + q**2  # normalization of the curve
+    def cdf(x, m, q):
+        ycum = ((m/2)*x**2 + q*x)/A
+        return ycum
 
+  
     mlogx1 = -torch.log(x1)
     mlogx2 = -torch.log(x2)
     
     u_1 = cdf(mlogx1, m, q)
     u_2 = mlogx2 / (m*mlogx1 + q)
-    return torch.cat((u_1.unsqueeze(1), u_2.unsqueeze(1)), axis=1)
+
+    jac = 1/(A*x1*x2)
+    return torch.cat((u_1.unsqueeze(1), u_2.unsqueeze(1)), axis=1), jac
