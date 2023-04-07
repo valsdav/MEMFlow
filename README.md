@@ -33,6 +33,22 @@
 
 
 # Installation
+
+# Environment on lxplus-gpu
+
+```
+source /cvmfs/sft.cern.ch/lcg/views/LCG_103cuda/x86_64-centos9-gcc11-opt/setup.sh
+python -m venv myenv
+source myenv/bin/activate
+pip install -e .
+cd ..
+git clone git@github.com:valsdav/zuko.git
+cd zuko
+pip install -e .
+
+```
+
+# Matrix Element evaluation
 - Start apptainer image with madgraph and LHAPDF
 - Generate the process
 - Compile it for python with https://cp3.irmp.ucl.ac.be/projects/madgraph/wiki/FAQ-General-4

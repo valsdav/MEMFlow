@@ -250,7 +250,7 @@ def get_x1x2_from_uniform(unif, final_state_mass, E_cm):
     E_cm constraint.
     It returns also a weight, that corresponds to 1/probabilty.
     = 1/ |detJacInverse(x1,x2)|'''
-    logtau = np.log((final_state_mass / E_cm)**2)
+    logtau = torch.log((final_state_mass / E_cm)**2)
     m = -1
     q = - logtau
     A = (m/2)*q**2 + q**2
@@ -276,7 +276,7 @@ def get_uniform_from_x1x2(x1, x2, final_state_mass, E_cm):
     It returns the detJacInverse function that correspond to the probability
     of x1, x2'''
 
-    logtau = np.log((final_state_mass / E_cm)**2)
+    logtau = torch.log((final_state_mass / E_cm)**2)
     m = -1
     q = -logtau
     A = (m/2)*q**2 + q**2  # normalization of the curve

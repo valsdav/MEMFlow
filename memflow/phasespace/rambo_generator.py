@@ -1,8 +1,6 @@
 import os
-
-
 import torch
-import tensorflow as tf
+# import tensorflow as tf
 
 import logging
 import math
@@ -34,6 +32,7 @@ class VirtualPhaseSpaceGenerator(object):
         pdf_active=False,
         uniform_x1x2=True,
         lhapdf_dir=None,
+        dev = None
     ):
         '''
         - pdf_active == True:  the energy of the center of mass is modelled by x1 and x2 fraction.
@@ -44,12 +43,12 @@ class VirtualPhaseSpaceGenerator(object):
         - uniform_x1x2: if True, two uniform numbers are given to model the x1 and x2 fraction.
         They need to be converted to x1 and x2 from the uniform space
         '''
-
-        dev = (
-            torch.device("cuda:" + str(0))
-            if torch.cuda.is_available()
-            else torch.device("cpu")
-        )
+        if dev == None:
+            dev = (
+                torch.device("cuda:" + str(0))
+                if torch.cuda.is_available()
+                else torch.device("cpu")
+            )
         self.initial_masses = initial_masses
         self.masses_t = final_masses.clone().to(dev)
         self.tot_final_state_masses = torch.sum(self.masses_t)
@@ -60,10 +59,10 @@ class VirtualPhaseSpaceGenerator(object):
         self.pdf = pdf
         self.pdf_active = pdf_active
         self.uniform_x1x2 = uniform_x1x2
-        if self.pdf_active:
-            if lhapdf_dir not in sys.path:
-                sys.path.append(lhapdf_dir)
-            import pdfflow
+        # if self.pdf_active:
+        #     if lhapdf_dir not in sys.path:
+        #         sys.path.append(lhapdf_dir)
+        #     import pdfflow
 
     def generateKinematics(self, E_cm, random_variables):
         """Generate a phase-space point with fixed center of mass energy."""
@@ -145,22 +144,22 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         Msqr = M**2
         return ((Msqr - (N + m) ** 2) * (Msqr - (N - m) ** 2)) ** 0.5 / (8.0 * Msqr)
 
-    def get_pdfQ2(self, pdf, pdg, x, scale2):
-        """Call the PDF and return the corresponding density.
-        The pdf object needs to be a pdfflow instance."""
-        if pdf is None:
-            return torch.ones_like(x)
+    # def get_pdfQ2(self, pdf, pdg, x, scale2):
+    #     """Call the PDF and return the corresponding density.
+    #     The pdf object needs to be a pdfflow instance."""
+    #     if pdf is None:
+    #         return torch.ones_like(x)
 
-        if pdg not in [21] and abs(pdg) not in range(1, 7):
-            return torch.ones_like(x)
+    #     if pdg not in [21] and abs(pdg) not in range(1, 7):
+    #         return torch.ones_like(x)
 
-        # Call to lhapdf API
-        f = pdf.xfxQ2(
-            [pdg],
-            tf.convert_to_tensor(x, dtype=tf.float64),
-            tf.convert_to_tensor(scale2, dtype=tf.float64),
-        )
-        return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
+    #     # Call to lhapdf API
+    #     f = pdf.xfxQ2(
+    #         [pdg],
+    #         tf.convert_to_tensor(x, dtype=tf.float64),
+    #         tf.convert_to_tensor(scale2, dtype=tf.float64),
+    #     )
+    #     return torch.tensor(f.numpy(), dtype=torch.double, device=x.device)
 
     def generateKinematics_batch(
         self,
@@ -234,15 +233,15 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                 random_variables.device
             )
 
-            x_cut = torch.where(
-                xb_1 < 1e-4, torch.zeros_like(xb_1), torch.ones_like(xb_1)
-            )
-            x_cut = torch.where(xb_2 < 1e-4, torch.zeros_like(x_cut), x_cut)
-            wgt_jac *= (
-                self.get_pdfQ2(self.pdf, pdgs[0], xb_1, p_energy)
-                * self.get_pdfQ2(self.pdf, pdgs[1], xb_2, p_energy)
-                * x_cut
-            )
+            # x_cut = torch.where(
+            #     xb_1 < 1e-4, torch.zeros_like(xb_1), torch.ones_like(xb_1)
+            # )
+            # x_cut = torch.where(xb_2 < 1e-4, torch.zeros_like(x_cut), x_cut)
+            # wgt_jac *= (
+            #     self.get_pdfQ2(self.pdf, pdgs[0], xb_1, p_energy)
+            #     * self.get_pdfQ2(self.pdf, pdgs[1], xb_2, p_energy)
+            #     * x_cut
+            # )
 
         assert random_variables.shape[1] == self.nDimPhaseSpace
 
@@ -610,7 +609,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         )
         M = torch.unsqueeze(M, 0).repeat(P.shape[0], 1)
         K_t = M.clone()
-        Q = torch.zeros_like(P)
+        Q = torch.zeros_like(P).to(P.device)
         Q[:, -1] = P[:, -1]  # Qn = pn
 
         # intermediate mass
@@ -621,7 +620,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             K_t[:, j] = M[:,j] - torch.sum(self.masses_t[j:])
 
         # output [0,1] distributed numbers
-        r = torch.zeros(P.shape[0], self.nDimPhaseSpace)
+        r = torch.zeros(P.shape[0], self.nDimPhaseSpace, device=P.device)
 
         for i in range(n, 1, -1):
             j = i - 1  # index for 0-based tensors
