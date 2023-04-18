@@ -41,11 +41,13 @@ class ConditioningTransformerLayer(nn.Module):
         batch_size = batch_jet.size(0)
         no_jets = batch_jet.size(1)
         no_lept = batch_lepton.size(1)
+        
+        dev = batch_jet.get_device()
 
-        ones = torch.ones(batch_size, no_jets, 1)  # type jet = 1
-        two = 2 * torch.ones(batch_size, no_lept, 1)  # type lepton = 2
-        three = 3 * torch.ones(batch_size, 1, 1)  # type met = 3
-        four = 4 * torch.ones(batch_size, 1, 1)  # type boost = 4
+        ones = torch.ones(batch_size, no_jets, 1).to(dev)  # type jet = 1
+        two = 2 * torch.ones(batch_size, no_lept, 1).to(dev)  # type lepton = 2
+        three = 3 * torch.ones(batch_size, 1, 1).to(dev)  # type met = 3
+        four = 4 * torch.ones(batch_size, 1, 1).to(dev)  # type boost = 4
 
         jet_afterLin_andLabel = torch.cat((jets_afterLin, ones), dim=-1)
         lept_afterLin_andLabel = torch.cat((lept_afterLin, two), dim=-1)
