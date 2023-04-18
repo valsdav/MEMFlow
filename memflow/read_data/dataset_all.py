@@ -4,10 +4,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 class DatasetCombined(Dataset):
-    def __init__(self, root):
+    def __init__(self, root, dev=None):
 
-        self.reco_data = Dataset_RecoLevel(root)
-        self.parton_data = Dataset_PartonLevel(root)
+        self.reco_data = Dataset_RecoLevel(root, dev=dev)
+        self.parton_data = Dataset_PartonLevel(root, dev=dev)
         
     def __getitem__(self, index):
         return *self.parton_data[index], *self.reco_data[index]

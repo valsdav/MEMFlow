@@ -15,7 +15,7 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
-                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], transform=None):
+                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -28,7 +28,6 @@ class Dataset_PartonLevel(Dataset):
 
         self.root = root
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
-        self.transform = transform
         self.object_types = object_types
 
         (self.partons_boosted, self.leptons_boosted,
@@ -63,6 +62,16 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("phasespace_intermediateParticles"))
         self.phasespace_rambo_detjacobian = torch.load(
             self.processed_file_names("phasespace_rambo_detjacobian"))
+        
+        if dev==torch.device('cuda') and torch.cuda.is_available():
+            self.mask_partons, self.data_partons = self.mask_partons.to(dev), self.data_partons.to(dev)
+            self.mask_lepton_partons, self.data_lepton_partons = self.mask_lepton_partons.to(dev), self.data_lepton_partons.to(dev)
+            self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
+            self.data_higgs_t_tbar_ISR = self.data_higgs_t_tbar_ISR.to(dev)
+            self.data_higgs_t_tbar_ISR_cartesian = self.data_higgs_t_tbar_ISR_cartesian.to(dev)
+            self.phasespace_intermediateParticles = self.phasespace_intermediateParticles.to(dev)
+            self.phasespace_rambo_detjacobian = self.phasespace_rambo_detjacobian.to(dev)
+            
 
     @property
     def raw_file_names(self):

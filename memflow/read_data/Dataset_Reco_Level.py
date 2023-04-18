@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], transform=None):
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
@@ -21,7 +21,6 @@ class Dataset_RecoLevel(Dataset):
 
         self.root = root
         os.makedirs(self.root + "/processed_jets", exist_ok=True)
-        self.transform = transform
         self.object_types = object_types
 
         # if an object is missing (example: jets/lepton_reco/met/boost => compute boost)
@@ -46,6 +45,13 @@ class Dataset_RecoLevel(Dataset):
             self.processed_file_names("met"))
         self.mask_boost, self.data_boost = torch.load(
             self.processed_file_names("boost"))
+        
+        if dev==torch.device('cuda') and torch.cuda.is_available():
+            self.mask_jets, self.data_jets = self.mask_jets.to(dev), self.data_jets.to(dev)
+            self.mask_lepton, self.data_lepton = self.mask_lepton.to(dev), self.data_lepton.to(dev)
+            self.mask_met, self.data_met = self.mask_met.to(dev), self.data_met.to(dev)
+            self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
+            
 
     @property
     def raw_file_names(self):
