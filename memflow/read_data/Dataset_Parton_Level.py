@@ -15,7 +15,7 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
-                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None):
+                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, dtype=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -72,6 +72,14 @@ class Dataset_PartonLevel(Dataset):
             self.phasespace_intermediateParticles = self.phasespace_intermediateParticles.to(dev)
             self.phasespace_rambo_detjacobian = self.phasespace_rambo_detjacobian.to(dev)
             
+        if dtype != None:
+            self.mask_partons, self.data_partons = self.mask_partons.to(dtype), self.data_partons.to(dtype)
+            self.mask_lepton_partons, self.data_lepton_partons = self.mask_lepton_partons.to(dtype), self.data_lepton_partons.to(dtype)
+            self.mask_boost, self.data_boost = self.mask_boost.to(dtype), self.data_boost.to(dtype)
+            self.data_higgs_t_tbar_ISR = self.data_higgs_t_tbar_ISR.to(dtype)
+            self.data_higgs_t_tbar_ISR_cartesian = self.data_higgs_t_tbar_ISR_cartesian.to(dtype)
+            self.phasespace_intermediateParticles = self.phasespace_intermediateParticles.to(dtype)
+            self.phasespace_rambo_detjacobian = self.phasespace_rambo_detjacobian.to(dtype)
 
     @property
     def raw_file_names(self):
@@ -95,7 +103,7 @@ class Dataset_PartonLevel(Dataset):
             partons = ak.with_name(partons, name="Momentum4D")
 
             gluon = partons[partons.prov == 4]
-            gluon = self.Reshape(gluon, utils.struct_partons, 1)[:, 0]
+            gluon = self.Reshape(gluon, utils.struct_gluon, 1)[:, 0]
 
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")

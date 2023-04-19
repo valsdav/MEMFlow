@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None):
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, dtype=None):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
@@ -51,6 +51,12 @@ class Dataset_RecoLevel(Dataset):
             self.mask_lepton, self.data_lepton = self.mask_lepton.to(dev), self.data_lepton.to(dev)
             self.mask_met, self.data_met = self.mask_met.to(dev), self.data_met.to(dev)
             self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
+            
+        if dtype != None:
+            self.mask_jets, self.data_jets = self.mask_jets.to(dtype), self.data_jets.to(dtype)
+            self.mask_lepton, self.data_lepton = self.mask_lepton.to(dtype), self.data_lepton.to(dtype)
+            self.mask_met, self.data_met = self.mask_met.to(dtype), self.data_met.to(dtype)
+            self.mask_boost, self.data_boost = self.mask_boost.to(dtype), self.data_boost.to(dtype)
             
 
     @property
@@ -134,7 +140,7 @@ class Dataset_RecoLevel(Dataset):
                        self.processed_file_names(object_type))
 
     def __getitem__(self, index):
-
+        
         return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
                 self.data_jets[index], self.mask_met[index], self.data_met[index],
                 self.mask_boost[index], self.data_boost[index])
