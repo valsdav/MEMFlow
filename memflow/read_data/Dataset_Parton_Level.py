@@ -84,7 +84,7 @@ class Dataset_PartonLevel(Dataset):
             partons = ak.with_name(partons, name="Momentum4D")
 
             gluon = partons[partons.prov == 4]
-            gluon = self.Reshape(gluon, utils.struct_partons, 1)[:, 0]
+            gluon = self.Reshape(gluon, utils.struct_gluon, 1)[:, 0]
 
             leptons = df["lepton_partons"]
             leptons = ak.with_name(leptons, name="Momentum4D")
@@ -247,6 +247,9 @@ class Dataset_PartonLevel(Dataset):
         x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / E_CM
         ps = phasespace.get_ps_from_momenta(
             self.data_higgs_t_tbar_ISR_cartesian, x1, x2)
+        
+        mask = self.gluon_ISR.pt == 0.
+        print(ps[0][mask])
 
         torch.save(ps, self.processed_file_names(
             "phasespace_intermediateParticles"))
