@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, dtype=None):
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False, dtype=None):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
@@ -19,6 +19,7 @@ class Dataset_RecoLevel(Dataset):
             "boost": ["x", "y", "z", "t"]
         }
 
+        self.debug = debug
         self.root = root
         os.makedirs(self.root + "/processed_jets", exist_ok=True)
         self.object_types = object_types
@@ -141,9 +142,15 @@ class Dataset_RecoLevel(Dataset):
 
     def __getitem__(self, index):
         
+        
+        if self.debug == True:
+            return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
+                    self.data_jets[index], self.mask_met[index], self.data_met[index],
+                    self.mask_boost[index], self.data_boost[index])
+        
         return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
-                self.data_jets[index], self.mask_met[index], self.data_met[index],
-                self.mask_boost[index], self.data_boost[index])
+                    self.data_jets[index], self.mask_met[index], self.data_met[index],
+                    self.mask_boost[index], self.data_boost[index])
 
     def __len__(self):
         size = len(self.mask_lepton)

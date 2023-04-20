@@ -4,17 +4,17 @@ import numpy as np
 
 
 class ConditioningTransformerLayer(nn.Module):
-    def __init__(self, jets_features, lepton_features, out_features, nhead, no_layers):
+    def __init__(self, jets_features, lepton_features, out_features, nhead, no_layers, dtype=torch.float32):
         super().__init__()
 
         self.lin_jet = nn.Linear(in_features=jets_features,
-                                 out_features=out_features - 1, dtype=torch.float32)
+                                 out_features=out_features - 1, dtype=dtype)
         self.lin_lept = nn.Linear(in_features=lepton_features,
-                                  out_features=out_features - 1, dtype=torch.float32)
+                                  out_features=out_features - 1, dtype=dtype)
         self.lin_met = nn.Linear(in_features=3,
-                                 out_features=out_features - 1, dtype=torch.float32)
+                                 out_features=out_features - 1, dtype=dtype)
         self.lin_boost = nn.Linear(in_features=4,
-                                   out_features=out_features - 1, dtype=torch.float32)
+                                   out_features=out_features - 1, dtype=dtype)
 
         self.gelu = nn.GELU()
         encoder_layer = nn.TransformerEncoderLayer(d_model=out_features,

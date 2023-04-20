@@ -15,7 +15,7 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
-                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, dtype=None):
+                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, debug=False, dtype=None):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -25,7 +25,9 @@ class Dataset_PartonLevel(Dataset):
             "H_thad_tlep_ISR": ["pt", "eta", "phi", "mass"],
             "H_thad_tlep_ISR_cartesian": ["E", "px", "py", "pz"]
         }
-
+        
+        
+        self.debug = debug
         self.root = root
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
         self.object_types = object_types
@@ -343,12 +345,16 @@ class Dataset_PartonLevel(Dataset):
 
     def __getitem__(self, index):
 
-        return (self.mask_partons[index], self.data_partons[index],
-                self.mask_lepton_partons[index], self.data_lepton_partons[index],
-                self.mask_boost[index], self.data_boost[index],
-                self.data_higgs_t_tbar_ISR[index], self.data_higgs_t_tbar_ISR_cartesian[index],
-                self.phasespace_intermediateParticles[index],
-                self.phasespace_rambo_detjacobian[index])
+        if self.debug == True:
+            return (self.mask_partons[index], self.data_partons[index],
+                    self.mask_lepton_partons[index], self.data_lepton_partons[index],
+                    self.mask_boost[index], self.data_boost[index],
+                    self.data_higgs_t_tbar_ISR[index], self.data_higgs_t_tbar_ISR_cartesian[index],
+                    self.phasespace_intermediateParticles[index],
+                    self.phasespace_rambo_detjacobian[index])
+        
+        return (self.phasespace_intermediateParticles[index],
+                    self.phasespace_rambo_detjacobian[index])
 
     def __len__(self):
         size = len(self.mask_partons)
