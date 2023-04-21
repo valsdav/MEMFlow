@@ -4,9 +4,11 @@ import numpy as np
 
 
 class ConditioningTransformerLayer(nn.Module):
-    def __init__(self, jets_features, lepton_features, out_features, nhead, no_layers, dtype=torch.float32):
+    def __init__(self, no_jets, jets_features, no_lept, lepton_features, out_features, nhead, no_layers, dtype=torch.float32):
         super().__init__()
-
+    
+        self.no_jets = no_jets
+        self.no_lept = no_lept
         self.lin_jet = nn.Linear(in_features=jets_features,
                                  out_features=out_features - 1, dtype=dtype)
         self.lin_lept = nn.Linear(in_features=lepton_features,
@@ -24,6 +26,12 @@ class ConditioningTransformerLayer(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer, num_layers=no_layers)
 
+        self.register_buffer('ones', torch.ones(no_jets, 1))
+        self.register_buffer('two', 2*torch.ones(no_lept, 1))
+        self.register_buffer('three', 3*torch.ones(1, 1))
+        self.register_buffer('four', 4*torch.ones(1, 1))
+        
+
     def reset_parameters(self):
         self.lin_jet.reset_parameters()
         self.lin_lept.reset_parameters()
@@ -38,21 +46,16 @@ class ConditioningTransformerLayer(nn.Module):
         met_afterLin = self.gelu(self.lin_met(batch_met))
         boost_afterLin = self.gelu(self.lin_boost(batch_boost))
 
-        batch_size = batch_jet.size(0)
-        no_jets = batch_jet.size(1)
-        no_lept = batch_lepton.size(1)
-        
-        dev = batch_jet.get_device()
+        batch_size = batch_jet.size(0)       
 
-        ones = torch.ones(batch_size, no_jets, 1).to(dev)  # type jet = 1
-        two = 2 * torch.ones(batch_size, no_lept, 1).to(dev)  # type lepton = 2
-        three = 3 * torch.ones(batch_size, 1, 1).to(dev)  # type met = 3
-        four = 4 * torch.ones(batch_size, 1, 1).to(dev)  # type boost = 4
-
-        jet_afterLin_andLabel = torch.cat((jets_afterLin, ones), dim=-1)
-        lept_afterLin_andLabel = torch.cat((lept_afterLin, two), dim=-1)
-        met_afterLin_andLabel = torch.cat((met_afterLin, three), dim=-1)
-        boost_afterLin_andLabel = torch.cat((boost_afterLin, four), dim=-1)
+        jet_afterLin_andLabel = torch.cat((jets_afterLin, 
+                                           self.ones.expand(batch_size, *list(self.ones.shape))), dim=-1)
+        lept_afterLin_andLabel = torch.cat((lept_afterLin, 
+                                            self.two.expand(batch_size, *list(self.two.shape))), dim=-1)
+        met_afterLin_andLabel = torch.cat((met_afterLin, 
+                                           self.three.expand(batch_size, *list(self.three.shape))), dim=-1)
+        boost_afterLin_andLabel = torch.cat((boost_afterLin, 
+                                             self.four.expand(batch_size, *list(self.four.shape))), dim=-1)
 
         transformer_input = torch.concat(
             (boost_afterLin_andLabel, lept_afterLin_andLabel, met_afterLin_andLabel, jet_afterLin_andLabel), dim=1)
