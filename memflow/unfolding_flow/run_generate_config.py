@@ -72,7 +72,6 @@ if __name__ == '__main__':
                                                              f'--flow_nTransforms={flow_nTransforms_value}',
                                                              f'--flow_bins={flow_bins_value}',
                                                              f'--flow_autoregressive={flow_autoregressive_value}',
-                                                             f'--training_batchSize={training_batchSize}',
                                                              f'--training_batchSizeTraining={training_batchSizeTraining}',
                                                              f'--training_batchSizeValid={training_batchSizeValid}',
                                                              f'--learningRate={learningRate_value}',

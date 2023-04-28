@@ -28,7 +28,6 @@ if __name__ == '__main__':
     parser.add_argument('--flow_nTransforms', type=int, default=5, help='number of transformations in NF')
     parser.add_argument('--flow_bins', type=int, default=32, help='number of bins in NF')
     parser.add_argument('--flow_autoregressive', type=bool, default=True, help='type of transformations in NF (by default autoregressive)')
-    parser.add_argument('--training_batchSize', type=int, default=2048, help='batch size')
     parser.add_argument('--training_batchSizeTraining', type=int, default=2048, help='batch size for training data')
     parser.add_argument('--training_batchSizeValid', type=int, default=2048, help='batch size for validation data')
     parser.add_argument('--learningRate', type=float, default=1e-5, help='learning rate for training')
@@ -69,7 +68,6 @@ if __name__ == '__main__':
         "training_params":
         {
             "lr": args.learningRate,
-            "batch_size": args.training_batchSize,
             "batch_size_training": args.training_batchSizeTraining,
             "batch_size_validation": args.training_batchSizeValid,
             "nepochs": args.nEpochs,
