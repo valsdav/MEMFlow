@@ -76,9 +76,10 @@ if __name__ == '__main__':
     
     current_path = os.path.dirname(os.path.realpath(__file__))
 
-    if(not os.path.exists(f'{current_path}/configs')):
-        os.makedirs(f'{current_path}/configs')
+    # Save configs in MEMFlow/scripts
+    if(not os.path.exists(f'{current_path}/../../scripts/configs')):
+        os.makedirs(f'{current_path}/../../scripts/configs')
         print("Create configs directory")
     
-    with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+    with open(f"{current_path}/../../scripts/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
         fo.write(OmegaConf.to_yaml(conf))
