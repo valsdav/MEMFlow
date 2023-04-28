@@ -7,7 +7,7 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 import numpy as np
-import utils
+import memflow.unfolding_flow.utils as utils
 from omegaconf import OmegaConf
 from tensorboardX import SummaryWriter
 
@@ -16,9 +16,6 @@ import argparse
 
 
 if __name__ == '__main__':
-
-    if (len(sys.argv) == 1):
-        raise Exception('Need at least 1 CLI argument - path to config.yaml file')
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--path_config', type=str, required=True, help='path to config.yaml File')
