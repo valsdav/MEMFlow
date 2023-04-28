@@ -1,12 +1,16 @@
 import sys
 import subprocess
+import argparse
+import os
 
 if __name__ == '__main__':
     
-    if (len(sys.argv) == 1):
-        raise Exception('Need at least 1 CLI argument - path to dataset')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--path_to_dataset', type=str, required=True, help='Path to dataset file')
+    parser.add_argument('--maxFiles', type=int, default=-1, help='Maximum number of files created')
+    args = parser.parse_args()
         
-    path_to_dataset = sys.argv[1]
+    path_to_dataset = args.path_to_dataset
     name = 'test'
     description = ''
     numberJets = 15
@@ -14,8 +18,8 @@ if __name__ == '__main__':
     numberLept = 1
     leptonFeatures = 3
     training_batchSize = 2048
-    training_batchSizeTraining = 2048
-    training_batchSizeValid = 2048
+    training_batchSizeTraining = 512
+    training_batchSizeValid = 512
     nEpochs = 50
     training_sampleDim = 500000
     valid_sampleDim = 69993
@@ -40,6 +44,7 @@ if __name__ == '__main__':
     
     
     i = 0
+    current_path = os.path.dirname(os.path.realpath(__file__))
     
     for cond_outFeatures_value in cond_outFeatures:
         for cond_nHead_value in cond_nHead:
@@ -53,9 +58,9 @@ if __name__ == '__main__':
                                         for learningRate_value in learningRate:
                                             
                                             version = 'v' + str(i)
-                                            i = i+1
                                             
-                                            subprocess.call(["python", "./generate_config.py",
+                                            subprocess.call(["python", 
+                                                             f"{current_path}/../memflow/unfolding_flow/generate_config.py",
                                                              f'--path_to_dataset={path_to_dataset}',
                                                              f'--name={name}',
                                                              f'--version={version}',
@@ -81,6 +86,11 @@ if __name__ == '__main__':
                                                              f'--sampling_points={sampling_points}',
                                                              f'--flow_hidden_layers={flow_hidden_layers_value}',
                                                              f'--flow_hidden_layersSize={flow_hidden_layersSize_value}'])
+                                            
+                                            i = i+1
+                                            
+                                            if i >= args.maxFiles and args.maxFiles != -1:
+                                                sys.exit()
     
     
     

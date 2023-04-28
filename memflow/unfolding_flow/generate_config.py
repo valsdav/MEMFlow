@@ -1,14 +1,9 @@
-#! /afs/cern.ch/user/a/adpetre/public/myenv/bin python
-
 from omegaconf import OmegaConf
 import sys
 import argparse
+import os
 
 if __name__ == '__main__':
-    
-    
-    if (len(sys.argv) == 1):
-        raise Exception('Need at least 1 CLI argument - path to dataset')
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--path_to_dataset', type=str, required=True, help='Path to dataset file')
@@ -78,6 +73,12 @@ if __name__ == '__main__':
     }
 
     conf = OmegaConf.create(config)
+    
+    current_path = os.path.dirname(os.path.realpath(__file__))
 
-    with open(f"configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+    if(not os.path.exists(f'{current_path}/configs')):
+        os.makedirs(f'{current_path}/configs')
+        print("Create configs directory")
+    
+    with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
         fo.write(OmegaConf.to_yaml(conf))

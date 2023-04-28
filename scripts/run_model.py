@@ -34,10 +34,10 @@ if __name__ == '__main__':
     with open(path_to_conf) as f:
         conf = OmegaConf.load(path_to_conf)
         print(conf)
-        print(conf.input_dataset)
     
     if (on_CPU == 0):
         device = torch.device('cuda')
+        torch.cuda.empty_cache()
     else:
         device = torch.device('cpu')
 
