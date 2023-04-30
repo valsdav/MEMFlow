@@ -17,9 +17,8 @@ if __name__ == '__main__':
     jetsFeatures = 5
     numberLept = 1
     leptonFeatures = 3
-    training_batchSize = 2048
-    training_batchSizeTraining = 512
-    training_batchSizeValid = 512
+    training_batchSizeTraining = 2048
+    training_batchSizeValid = 2048
     nEpochs = 50
     training_sampleDim = 500000
     valid_sampleDim = 69993
