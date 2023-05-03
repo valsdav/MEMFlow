@@ -18,6 +18,8 @@ import sys
 import argparse
 import os
 
+def SaveModel
+
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
@@ -104,6 +106,17 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
 
         writer.close()
+        
+        resultsDir = f"{os.getcwd()}/logs/result_{config.name}_{config.version}"
+        
+        torch.save({
+            'modelA_state_dict': model.state_dict(),
+            'optimizerA_state_dict': optimizer.state_dict()
+            }, resultsDir)
+        
+        
+        
+        
 
 
 if __name__ == '__main__':

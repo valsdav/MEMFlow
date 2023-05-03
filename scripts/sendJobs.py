@@ -40,6 +40,10 @@ if __name__ == '__main__':
     # if environment path is passed, get its absolute path
     if (env_path != "-1"):
         abs_envPath = os.path.abspath(env_path)
+        
+    model_results = f"{os.getcwd()}/logs"
+    
+    mkdir_p(model_results)
     
     job_directory = f"{os.getcwd()}/jobs"
     
@@ -84,7 +88,7 @@ if __name__ == '__main__':
             fh.writelines("rmdir  -rf /scratch/$USER/${SLURM_JOB_ID}\n")
             
 
-        #os.system(f"sbatch {job_file}")
+        # os.system(f"sbatch {job_file}")
                 
         
         
