@@ -22,14 +22,16 @@ def mkdir_p(dir):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_directory', type=str, required=True, help='path to config.yaml File')
-    parser.add_argument('--env_path', type=str, default="-1", help='path to python environment')
-    parser.add_argument('--on_CPU', type=bool, default=0, help='run on CPU boolean, by default: 0')
+    parser.add_argument('--config-directory', type=str, required=True, help='path to config.yaml directory')
+    parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     args = parser.parse_args()
     
     conf_dir = args.config_directory
-    env_path = args.env_path
-    on_CPU = args.on_CPU # by default run on GPU
+    on_GPU = args.on_GPU # by default run on CPU
+    if on_GPU:
+        on_GPU = '--on-GPU'
+    else:
+        on_GPU = ''
     
     # get path of 'run_model' script
     scriptPath = str(pathlib.Path(__file__).parent.resolve()) + "/run_model.py"
@@ -37,12 +39,7 @@ if __name__ == '__main__':
     # get absolute paths of all config files in conf_dir
     confFiles = absoluteFilePaths(conf_dir)
     
-    # if environment path is passed, get its absolute path
-    if (env_path != "-1"):
-        abs_envPath = os.path.abspath(env_path)
-        
-    model_results = f"{os.getcwd()}/logs"
-    
+    model_results = f"{os.getcwd()}/results/logs"
     mkdir_p(model_results)
     
     job_directory = f"{os.getcwd()}/jobs"
@@ -54,7 +51,7 @@ if __name__ == '__main__':
     for i, conf_path in enumerate(confFiles):
         
         # one job file for each config file
-        job_file = os.path.join(job_directory, f"{i}.job")
+        job_file = os.path.join(job_directory, f"v{i}.job")
 
         with open(job_file, 'w') as fh:
             
@@ -68,10 +65,12 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --mem=4000M      # memory (per job)\n")
             fh.writelines("#SBATCH --time=0-00:30   # time  in format DD-HH:MM\n")    
             
-            if (env_path != "-1"):
-                fh.writelines("\n\n")
-                fh.writelines("# Activate environment:\n")
-                fh.writelines(f"source {abs_envPath}\n")
+            fh.writelines("\n\n")
+            fh.writelines("# Activate environment:\n")
+            fh.writelines("source /work/$USER/miniconda3/etc/profile.d/conda.sh\n")
+            fh.writelines("export PATH=/work/$USER/miniconda3/bin:$PATH\n")
+            fh.writelines("export LD_LIBRARY_PATH=/work/adpetre/miniconda3/envs/dizertatie/lib:$LD_LIBRARY_PATH\n") 
+            fh.writelines("conda activate dizertatie\n")
             
             fh.writelines("\n\n")
             fh.writelines("# each node has local /scratch space to be used during job run\n")
@@ -81,19 +80,13 @@ if __name__ == '__main__':
             fh.writelines("\n\n")
             fh.writelines("echo CUDA_VISIBLE_DEVICES : $CUDA_VISIBLE_DEVICES\n")
             fh.writelines("# python program script.py should use CUDA_VISIBLE_DEVICES variable (*NOT* hardcoded GPU's numbers)\n")
-            fh.writelines(f"python {scriptPath} --path_config={conf_path} --on_CPU={on_CPU}\n")
+            fh.writelines(f"/work/adpetre/miniconda3/envs/dizertatie/bin/python {scriptPath} --path-config={conf_path} {on_GPU}\n")
             
             fh.writelines("\n\n")
             fh.writelines("# cleaning of temporal working dir when job was completed:\n")
-            fh.writelines("rmdir  -rf /scratch/$USER/${SLURM_JOB_ID}\n")
-            
+            fh.writelines("rm  -rf /scratch/$USER/${SLURM_JOB_ID}\n")
 
-        # os.system(f"sbatch {job_file}")
+
+        os.system(f"sbatch {job_file}")
                 
-        
-        
-        
-        
-        
-        
         

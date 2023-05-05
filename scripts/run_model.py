@@ -18,16 +18,14 @@ import sys
 import argparse
 import os
 
-def SaveModel
-
-
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
     
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
     
-    name_dir = f'runs/{config.version}'
+
+    name_dir = f'{os.getcwd()}/results/runs/{config.version}'
     writer = SummaryWriter(name_dir)
     
     for e in range(config.training_params.nepochs):
@@ -37,7 +35,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         # training loop    
         print("Before training loop")
         for i, data in enumerate(trainingLoader):
-
+            
             if (i % 100 == 0):
                 print(i)
 
@@ -107,7 +105,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
 
         writer.close()
         
-        resultsDir = f"{os.getcwd()}/logs/result_{config.name}_{config.version}"
+        resultsDir = f"{os.getcwd()}/results/logs/result_{config.name}_{config.version}"
         
         torch.save({
             'modelA_state_dict': model.state_dict(),
@@ -115,19 +113,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
             }, resultsDir)
         
         
-        
-        
-
 
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_config', type=str, required=True, help='path to config.yaml File')
-    parser.add_argument('--on_CPU', type=bool, default=0, help='run on CPU boolean, by default: 0')
+    parser.add_argument('--path-config', type=str, required=True, help='path to config.yaml File')
+    parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     args = parser.parse_args()
     
     path_to_conf = args.path_config
-    on_CPU = args.on_CPU # by default run on GPU
+    on_GPU = args.on_GPU # by default run on CPU
 
     # Read config file in 'conf'
     with open(path_to_conf) as f:
@@ -136,7 +131,7 @@ if __name__ == '__main__':
     
     print("Training with cfg: \n", OmegaConf.to_yaml(conf))
     
-    if (on_CPU == 0):
+    if on_GPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = torch.device('cpu')
@@ -182,6 +177,7 @@ if __name__ == '__main__':
     # Copy model on GPU memory
     if (device == torch.device('cuda')):
         model = model.cuda()
+
         
     print(f"parameters total:{utils.count_parameters(model)}")
     
@@ -189,10 +185,9 @@ if __name__ == '__main__':
         
         # TODO: split the data for multi-GPU processing
         if len(actual_devices) > 1:
-            raise("NOT IMPLEMENTED: TODO")
-            world_size = torch.cuda.device_count()
+            #world_size = torch.cuda.device_count()
             # make a dictionary with k: rank, v: actual device
-            dev_dct = {i: actual_devices[i] for i in range(world_size)}
+            #dev_dct = {i: actual_devices[i] for i in range(world_size)}
             #print(f"Devices dict: {dev_dct}")
             #mp.spawn(
             #    TrainingAndValidLoop,
@@ -200,6 +195,7 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader)
         else:
             TrainingAndValidLoop(conf, model, train_loader, val_loader)
     else:
