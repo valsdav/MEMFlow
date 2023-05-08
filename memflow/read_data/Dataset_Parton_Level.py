@@ -15,7 +15,8 @@ torch.set_default_dtype(torch.double)
 
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
-                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, debug=False, dtype=None):
+                                           "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, debug=False,
+                 dtype=None, parton_list=[]):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -29,6 +30,7 @@ class Dataset_PartonLevel(Dataset):
         
         self.debug = debug
         self.root = root
+        self.parton_list = parton_list
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
         self.object_types = object_types
 
@@ -384,6 +386,7 @@ class Dataset_PartonLevel(Dataset):
         return top_leptonic
 
     def __getitem__(self, index):
+                    
 
         if self.debug == True:
             return (self.mask_partons[index], self.data_partons[index],
@@ -393,14 +396,14 @@ class Dataset_PartonLevel(Dataset):
                     self.phasespace_intermediateParticles[index],
                     self.phasespace_rambo_detjacobian[index],
                     self.log_data_higgs_t_tbar_ISR_cartesian[index],
-                    self.mean_log_data_higgs_t_tbar_ISR_cartesian[index], self.std_log_data_higgs_t_tbar_ISR_cartesian[index],
+                    # no index for mean/std because size is [4]
+                    self.mean_log_data_higgs_t_tbar_ISR_cartesian, self.std_log_data_higgs_t_tbar_ISR_cartesian,
                     self.logScaled_data_higgs_t_tbar_ISR_cartesian[index])
         
-        return (self.phasespace_intermediateParticles[index],
-               self.phasespace_rambo_detjacobian[index],
-               self.log_data_higgs_t_tbar_ISR_cartesian[index],
-               self.mean_log_data_higgs_t_tbar_ISR_cartesian[index], self.std_log_data_higgs_t_tbar_ISR_cartesian[index],
-               self.logScaled_data_higgs_t_tbar_ISR_cartesian[index])
+        
+        return [getattr(self, field)[index] if field != 'mean_log_data_higgs_t_tbar_ISR_cartesian' \
+                    and field != 'std_log_data_higgs_t_tbar_ISR_cartesian' \
+                    else getattr(self, field) for field in self.parton_list]
 
     def __len__(self):
         size = len(self.mask_partons)

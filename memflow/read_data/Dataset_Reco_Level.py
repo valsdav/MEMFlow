@@ -10,7 +10,8 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False, dtype=None):
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False,
+                 dtype=None, reco_list=[]):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
@@ -22,6 +23,7 @@ class Dataset_RecoLevel(Dataset):
 
         self.debug = debug
         self.root = root
+        self.reco_list = reco_list
         os.makedirs(self.root + "/processed_jets", exist_ok=True)
         self.object_types = object_types
 
@@ -230,17 +232,13 @@ class Dataset_RecoLevel(Dataset):
 
     def __getitem__(self, index):
         
-        
         if self.debug == True:
             return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
                     self.data_jets[index], self.mask_met[index], self.data_met[index],
                     self.mask_boost[index], self.data_boost[index],
                     self.recoParticlesCartesian[index], self.recoParticlesScaled[index])
         
-        return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
-                    self.data_jets[index], self.mask_met[index], self.data_met[index],
-                    self.mask_boost[index], self.data_boost[index],
-                    self.recoParticlesCartesian[index], self.recoParticlesScaled[index])
+        return (getattr(self, field)[index] for field in self.reco_list)
 
     def __len__(self):
         size = len(self.mask_lepton)
