@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 class DatasetCombined(Dataset):
     def __init__(self, root, dev=None, debug=False, dtype=None,
                  reco_list=['mask_lepton', 'data_lepton', 'mask_jets', 'data_jets', 'mask_met', 'data_met',
-                            'mask_boost', 'data_boost', 'recoParticlesCartesian', 'recoParticlesScaled'],
+                            'mask_boost', 'data_boost', 'recoParticlesCartesian', 'recoParticlesCartesianScaled'],
                  parton_list=['phasespace_intermediateParticles', 'phasespace_rambo_detjacobian',
                               'log_data_higgs_t_tbar_ISR_cartesian', 'mean_log_data_higgs_t_tbar_ISR_cartesian',
                               'std_log_data_higgs_t_tbar_ISR_cartesian', 'logScaled_data_higgs_t_tbar_ISR_cartesian']):

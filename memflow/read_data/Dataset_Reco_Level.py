@@ -62,14 +62,14 @@ class Dataset_RecoLevel(Dataset):
         self.recoParticlesCartesian = torch.load(
             self.processed_file_names("recoParticles_Cartesian"))
         
-        if not os.path.isfile(self.processed_file_names("recoParticlesScaled")):
-                print("Create new file for recoParticlesScaled")
+        if not os.path.isfile(self.processed_file_names("recoParticlesCartesianScaled")):
+                print("Create new file for recoParticlesCartesianScaled")
                 self.scaleCartesianTensor()
         else:
-                print("recoParticlesScaled file already exists")
+                print("recoParticlesCartesianScaled file already exists")
         
-        self.recoParticlesScaled = torch.load(
-            self.processed_file_names("recoParticlesScaled"))
+        self.recoParticlesCartesianScaled = torch.load(
+            self.processed_file_names("recoParticlesCartesianScaled"))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
             self.mask_jets, self.data_jets = self.mask_jets.to(dev), self.data_jets.to(dev)
@@ -77,7 +77,7 @@ class Dataset_RecoLevel(Dataset):
             self.mask_met, self.data_met = self.mask_met.to(dev), self.data_met.to(dev)
             self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
             self.recoParticlesCartesian = self.recoParticlesCartesian.to(dev)
-            self.recoParticlesScaled = self.recoParticlesScaled.to(dev)
+            self.recoParticlesCartesianScaled = self.recoParticlesCartesianScaled.to(dev)
             
         if dtype != None:
             self.mask_jets, self.data_jets = self.mask_jets.to(dtype), self.data_jets.to(dtype)
@@ -85,7 +85,7 @@ class Dataset_RecoLevel(Dataset):
             self.mask_met, self.data_met = self.mask_met.to(dtype), self.data_met.to(dtype)
             self.mask_boost, self.data_boost = self.mask_boost.to(dtype), self.data_boost.to(dtype)
             self.recoParticlesCartesian = self.recoParticlesCartesian.to(dtype)
-            self.recoParticlesScaled = self.recoParticlesScaled.to(dtype)
+            self.recoParticlesCartesianScaled = self.recoParticlesCartesianScaled.to(dtype)
             
 
     @property
@@ -223,12 +223,12 @@ class Dataset_RecoLevel(Dataset):
             feature_scaled = np.ma.getdata(feature_scaled)
             feature_tensor = torch.tensor(feature_scaled, dtype=torch.float).unsqueeze(dim=2)
             if i == 0:
-                recoParticlesScaled = feature_tensor
+                recoParticlesCartesianScaled = feature_tensor
             else:
-                recoParticlesScaled = torch.cat((recoParticlesScaled, feature_tensor), dim=2)
+                recoParticlesCartesianScaled = torch.cat((recoParticlesCartesianScaled, feature_tensor), dim=2)
         
-        torch.save((recoParticlesScaled),
-                           self.processed_file_names('recoParticlesScaled'))
+        torch.save((recoParticlesCartesianScaled),
+                           self.processed_file_names('recoParticlesCartesianScaled'))
 
     def __getitem__(self, index):
         
@@ -236,7 +236,7 @@ class Dataset_RecoLevel(Dataset):
             return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
                     self.data_jets[index], self.mask_met[index], self.data_met[index],
                     self.mask_boost[index], self.data_boost[index],
-                    self.recoParticlesCartesian[index], self.recoParticlesScaled[index])
+                    self.recoParticlesCartesian[index], self.recoParticlesCartesianScaled[index])
         
         return (getattr(self, field)[index] for field in self.reco_list)
 
