@@ -5,7 +5,6 @@ import torch
 import numpy as np
 import awkward as ak
 from torch.utils.data import Dataset
-from torch.nn.functional import normalize
 
 
 
