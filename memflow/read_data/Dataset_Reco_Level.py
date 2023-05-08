@@ -62,14 +62,25 @@ class Dataset_RecoLevel(Dataset):
         self.recoParticlesCartesian = torch.load(
             self.processed_file_names("recoParticles_Cartesian"))
         
-        if not os.path.isfile(self.processed_file_names("recoParticlesCartesianScaled")):
-                print("Create new file for recoParticlesCartesianScaled")
-                self.scaleCartesianTensor()
+        if not os.path.isfile(self.processed_file_names("scaledLogRecoParticles")):
+                print("Create new file for LogData")
+                self.scaleObjects()
         else:
-                print("recoParticlesCartesianScaled file already exists")
+                print("LogData file already exists")
         
-        self.recoParticlesCartesianScaled = torch.load(
-            self.processed_file_names("recoParticlesCartesianScaled"))
+        self.recoParticles = torch.load(self.processed_file_names('recoParticles'))
+        
+        self.scaledLogJets, self.LogJets, self.meanJets, self.stdJets = torch.load(self.processed_file_names('scaledLogJets'))
+        self.scaledLogLepton, self.LogLepton, self.meanLepton, self.stdLepton = \
+                                            torch.load(self.processed_file_names('scaledLogLepton'))
+        self.scaledLogMet, self.LogMet, self.meanMet, self.stdMet = \
+                                            torch.load(self.processed_file_names('scaledLogMet'))
+        self.scaledLogBoost, self.LogBoost, self.meanBoost, self.stdBoost = \
+                                            torch.load(self.processed_file_names('scaledLogBoost'))
+        self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian, self.meanRecoCartesian, self.stdRecoCartesian = \
+                                            torch.load(self.processed_file_names('scaledLogRecoParticlesCartesian'))
+        self.scaledLogRecoParticles, self.LogRecoParticles, self.meanRecoParticles, self.stdRecoParticles = \
+                                            torch.load(self.processed_file_names('scaledLogRecoParticles'))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
             self.mask_jets, self.data_jets = self.mask_jets.to(dev), self.data_jets.to(dev)
@@ -77,7 +88,23 @@ class Dataset_RecoLevel(Dataset):
             self.mask_met, self.data_met = self.mask_met.to(dev), self.data_met.to(dev)
             self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
             self.recoParticlesCartesian = self.recoParticlesCartesian.to(dev)
-            self.recoParticlesCartesianScaled = self.recoParticlesCartesianScaled.to(dev)
+            self.recoParticles = self.recoParticles.to(dev)
+        
+            self.scaledLogJets, self.LogJets = self.scaledLogJets.to(dev), self.LogJets.to(dev)
+            self.scaledLogLepton, self.LogLepton = self.scaledLogLepton.to(dev), self.LogLepton.to(dev)
+            self.scaledLogMet, self.LogMet = self.scaledLogMet.to(dev), self.LogMet.to(dev)
+            self.scaledLogBoost, self.LogBoost = self.scaledLogBoost.to(dev), self.LogBoost.to(dev)
+            self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian = \
+                                        self.scaledLogRecoParticlesCartesian.to(dev), self.LogRecoParticlesCartesian.to(dev)
+            self.scaledLogRecoParticles, self.LogRecoParticles = self.scaledLogRecoParticles.to(dev), \
+                                                                    self.LogRecoParticles.to(dev)
+            
+            self.meanJets, self.stdJets = self.meanJets.to(dev), self.stdJets.to(dev)
+            self.meanLepton, self.stdLepton = self.meanLepton.to(dev), self.stdLepton.to(dev)
+            self.meanMet, self.stdMet = self.meanMet.to(dev), self.stdMet.to(dev)
+            self.meanBoost, self.stdBoost = self.meanBoost.to(dev), self.stdBoost.to(dev)
+            self.meanRecoCartesian, self.stdRecoCartesian = self.meanRecoCartesian.to(dev), self.stdRecoCartesian.to(dev)
+            self.meanRecoParticles, self.stdRecoParticles = self.meanRecoParticles.to(dev), self.stdRecoParticles.to(dev)
             
         if dtype != None:
             self.mask_jets, self.data_jets = self.mask_jets.to(dtype), self.data_jets.to(dtype)
@@ -85,7 +112,23 @@ class Dataset_RecoLevel(Dataset):
             self.mask_met, self.data_met = self.mask_met.to(dtype), self.data_met.to(dtype)
             self.mask_boost, self.data_boost = self.mask_boost.to(dtype), self.data_boost.to(dtype)
             self.recoParticlesCartesian = self.recoParticlesCartesian.to(dtype)
-            self.recoParticlesCartesianScaled = self.recoParticlesCartesianScaled.to(dtype)
+            self.recoParticles = self.recoParticles.to(dtype)
+        
+            self.scaledLogJets, self.LogJets = self.scaledLogJets.to(dtype), self.LogJets.to(dtype)
+            self.scaledLogLepton, self.LogLepton = self.scaledLogLepton.to(dtype), self.LogLepton.to(dtype)
+            self.scaledLogMet, self.LogMet = self.scaledLogMet.to(dtype), self.LogMet.to(dtype)
+            self.scaledLogBoost, self.LogBoost = self.scaledLogBoost.to(dtype), self.LogBoost.to(dtype)
+            self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian = \
+                                        self.scaledLogRecoParticlesCartesian.to(dtype), self.LogRecoParticlesCartesian.to(dtype)
+            self.scaledLogRecoParticles, self.LogRecoParticles = self.scaledLogRecoParticles.to(dtype), \
+                                                                    self.LogRecoParticles.to(dtype)
+            
+            self.meanJets, self.stdJets = self.meanJets.to(dtype), self.stdJets.to(dtype)
+            self.meanLepton, self.stdLepton = self.meanLepton.to(dtype), self.stdLepton.to(dtype)
+            self.meanMet, self.stdMet = self.meanMet.to(dtype), self.stdMet.to(dtype)
+            self.meanBoost, self.stdBoost = self.meanBoost.to(dtype), self.stdBoost.to(dtype)
+            self.meanRecoCartesian, self.stdRecoCartesian = self.meanRecoCartesian.to(dtype), self.stdRecoCartesian.to(dtype)
+            self.meanRecoParticles, self.stdRecoParticles = self.meanRecoParticles.to(dtype), self.stdRecoParticles.to(dtype)
             
 
     @property
@@ -203,32 +246,84 @@ class Dataset_RecoLevel(Dataset):
             
             torch.save((recoParticlesCartesian),
                            self.processed_file_names('recoParticles_Cartesian'))
-            
-    def scaleCartesianTensor(self):
+    
+    
+    def scaleTensor(self, object_tensor, mask, isCartesian=False, isJet=False):
         
         # get masks of 'recoParticlesCartesian'
-        recoMask = torch.cat((self.mask_jets, self.mask_lepton, self.mask_met), dim=1)
         
-        recoMaskNumpy = recoMask.numpy()
-        recoNumpy = self.recoParticlesCartesian.numpy()
+        maskNumpy = mask.numpy()
+        objectNumpy = object_tensor.numpy()
         
-        for i in range(4):
-            feature = recoNumpy[:,:,i]
-            feature_masked = np.ma.masked_array(feature, mask=np.logical_not(recoMaskNumpy))
+        if isCartesian:
+            no_elements = 4
+            log_objectNumpy = np.sign(objectNumpy)*np.log(1+np.abs(objectNumpy))
+            log_objectTensor = torch.tensor(log_objectNumpy, dtype=torch.float)
+        else:
+            no_elements = 3
+            pt = objectNumpy[:,:,0]
+            log_pt = np.sign(pt)*np.log(1+np.abs(pt))
+            objectNumpy[:,:,0] = log_pt
+            
+            log_objectTensor = torch.tensor(objectNumpy, dtype=torch.float)
+            
+        for i in range(no_elements):
+            feature = log_objectTensor[:,:,i].numpy()
+            feature_masked = np.ma.masked_array(feature, mask=np.logical_not(maskNumpy))
 
             feature_scaled = (feature_masked - feature_masked.mean())/feature_masked.std()
-            feature_scaled[np.logical_not(recoMaskNumpy)] = 0
+            feature_scaled[np.logical_not(maskNumpy)] = 0
             
             # use only the ndarray from masked array
             feature_scaled = np.ma.getdata(feature_scaled)
             feature_tensor = torch.tensor(feature_scaled, dtype=torch.float).unsqueeze(dim=2)
+            mean_tensor = torch.tensor(feature_masked.mean(), dtype=torch.float).reshape(1)
+            std_tensor = torch.tensor(feature_masked.std(), dtype=torch.float).reshape(1)
             if i == 0:
-                recoParticlesCartesianScaled = feature_tensor
+                logScaled_objectTensor = feature_tensor
+                meanLogTensor = mean_tensor
+                stdLogTensor = std_tensor
             else:
-                recoParticlesCartesianScaled = torch.cat((recoParticlesCartesianScaled, feature_tensor), dim=2)
+                logScaled_objectTensor = torch.cat((logScaled_objectTensor, feature_tensor), dim=2)
+                meanLogTensor = torch.cat((meanLogTensor, mean_tensor), dim=0)
+                stdLogTensor = torch.cat((stdLogTensor, std_tensor), dim=0)
         
-        torch.save((recoParticlesCartesianScaled),
-                           self.processed_file_names('recoParticlesCartesianScaled'))
+        if isJet:
+            logScaled_objectTensor = torch.cat((logScaled_objectTensor, object_tensor[:,:,3:5]), dim=2)
+            
+        return meanLogTensor, stdLogTensor, logScaled_objectTensor, log_objectTensor
+                
+        
+    def scaleObjects(self):
+        
+        meanJets, stdJets, scaledLogJets, LogJets = self.scaleTensor(self.data_jets,
+                                                                     self.mask_jets, isCartesian=False, isJet=True)
+        meanLepton, stdLepton, scaledLogLepton, LogLepton = self.scaleTensor(self.data_lepton, self.mask_lepton,
+                                                                isCartesian=False, isJet=False)
+        meanMet, stdMet, scaledLogMet, LogMet = self.scaleTensor(self.data_met, self.mask_met, isCartesian=False, isJet=False)
+        
+        meanBoost, stdBoost, scaledLogBoost, LogBoost = self.scaleTensor(self.data_boost,
+                                                                         self.mask_boost, isCartesian=True, isJet=False)
+        
+        recoMask = torch.cat((self.mask_jets, self.mask_lepton, self.mask_met), dim=1)
+        meanRecoCartesian, stdRecoCartesian, scaledLogRecoParticlesCartesian, LogRecoParticlesCartesian = \
+                                           self.scaleTensor(self.recoParticlesCartesian,
+                                                            recoMask, isCartesian=True, isJet=False)
+        
+        recoParticles = torch.cat((self.data_jets[:,:,:3], self.data_lepton, self.data_met), dim=1)
+        meanRecoParticles, stdRecoParticles, scaledLogRecoParticles, LogRecoParticles = self.scaleTensor(recoParticles,
+                                                                                  recoMask, isCartesian=False, isJet=False)
+        
+        torch.save((recoParticles), self.processed_file_names('recoParticles'))
+        
+        torch.save((scaledLogJets, LogJets, meanJets, stdJets), self.processed_file_names('scaledLogJets'))
+        torch.save((scaledLogLepton, LogLepton, meanLepton, stdLepton), self.processed_file_names('scaledLogLepton'))
+        torch.save((scaledLogMet, LogMet, meanMet, stdMet), self.processed_file_names('scaledLogMet'))
+        torch.save((scaledLogBoost, LogBoost, meanBoost, stdBoost), self.processed_file_names('scaledLogBoost'))
+        torch.save((scaledLogRecoParticlesCartesian, LogRecoParticlesCartesian, meanRecoCartesian, stdRecoCartesian),
+                       self.processed_file_names('scaledLogRecoParticlesCartesian'))
+        torch.save((scaledLogRecoParticles, LogRecoParticles, meanRecoParticles, stdRecoParticles),
+                       self.processed_file_names('scaledLogRecoParticles'))
 
     def __getitem__(self, index):
         
@@ -236,10 +331,12 @@ class Dataset_RecoLevel(Dataset):
             return (self.mask_lepton[index], self.data_lepton[index], self.mask_jets[index],
                     self.data_jets[index], self.mask_met[index], self.data_met[index],
                     self.mask_boost[index], self.data_boost[index],
-                    self.recoParticlesCartesian[index], self.recoParticlesCartesianScaled[index])
+                    self.scaledLogRecoParticlesCartesian[index], self.LogRecoParticlesCartesian[index])
         
-        return (getattr(self, field)[index] for field in self.reco_list)
+        return [getattr(self, field)[index] if 'mean' not in field and 'std' not in field \
+                    else getattr(self, field) for field in self.reco_list]
 
     def __len__(self):
         size = len(self.mask_lepton)
         return size
+
