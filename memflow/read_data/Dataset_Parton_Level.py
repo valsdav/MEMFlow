@@ -81,30 +81,12 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("LogScaled_H_thad_tlep_ISR_cartesian"))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
-            self.mask_partons, self.data_partons = self.mask_partons.to(dev), self.data_partons.to(dev)
-            self.mask_lepton_partons, self.data_lepton_partons = self.mask_lepton_partons.to(dev), self.data_lepton_partons.to(dev)
-            self.mask_boost, self.data_boost = self.mask_boost.to(dev), self.data_boost.to(dev)
-            self.data_higgs_t_tbar_ISR = self.data_higgs_t_tbar_ISR.to(dev)
-            self.data_higgs_t_tbar_ISR_cartesian = self.data_higgs_t_tbar_ISR_cartesian.to(dev)
-            self.phasespace_intermediateParticles = self.phasespace_intermediateParticles.to(dev)
-            self.phasespace_rambo_detjacobian = self.phasespace_rambo_detjacobian.to(dev)
-            self.log_data_higgs_t_tbar_ISR_cartesian = self.log_data_higgs_t_tbar_ISR_cartesian.to(dev)
-            self.mean_log_data_higgs_t_tbar_ISR_cartesian  = self.mean_log_data_higgs_t_tbar_ISR_cartesian.to(dev)
-            self.std_log_data_higgs_t_tbar_ISR_cartesian = self.std_log_data_higgs_t_tbar_ISR_cartesian.to(dev)
-            self.logScaled_data_higgs_t_tbar_ISR_cartesian = self.logScaled_data_higgs_t_tbar_ISR_cartesian.to(dev)
+            for field in self.parton_list:
+                setattr(self, field, getattr(self, field).to(dev)) # move elements from reco_list to GPU memory
             
         if dtype != None:
-            self.mask_partons, self.data_partons = self.mask_partons.to(dtype), self.data_partons.to(dtype)
-            self.mask_lepton_partons, self.data_lepton_partons = self.mask_lepton_partons.to(dtype), self.data_lepton_partons.to(dtype)
-            self.mask_boost, self.data_boost = self.mask_boost.to(dtype), self.data_boost.to(dtype)
-            self.data_higgs_t_tbar_ISR = self.data_higgs_t_tbar_ISR.to(dtype)
-            self.data_higgs_t_tbar_ISR_cartesian = self.data_higgs_t_tbar_ISR_cartesian.to(dtype)
-            self.phasespace_intermediateParticles = self.phasespace_intermediateParticles.to(dtype)
-            self.phasespace_rambo_detjacobian = self.phasespace_rambo_detjacobian.to(dtype)
-            self.log_data_higgs_t_tbar_ISR_cartesian = self.log_data_higgs_t_tbar_ISR_cartesian.to(dtype)
-            self.mean_log_data_higgs_t_tbar_ISR_cartesian  = self.mean_log_data_higgs_t_tbar_ISR_cartesian.to(dtype)
-            self.std_log_data_higgs_t_tbar_ISR_cartesian = self.std_log_data_higgs_t_tbar_ISR_cartesian.to(dtype)
-            self.logScaled_data_higgs_t_tbar_ISR_cartesian = self.logScaled_data_higgs_t_tbar_ISR_cartesian.to(dtype)
+            for field in self.parton_list:
+                setattr(self, field, getattr(self, field).to(dtype)) # move elements from reco_list to GPU memory
 
     @property
     def raw_file_names(self):
