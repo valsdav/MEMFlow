@@ -256,13 +256,15 @@ class Dataset_RecoLevel(Dataset):
         objectNumpy = object_tensor.numpy()
         
         if isCartesian:
+            # case [E,px,py,pz] or [x,y,z,t]
             no_elements = 4
-            log_objectNumpy = np.sign(objectNumpy)*np.log(1+np.abs(objectNumpy))
+            log_objectNumpy = np.sign(objectNumpy)*np.log(1+np.abs(objectNumpy)) 
             log_objectTensor = torch.tensor(log_objectNumpy, dtype=torch.float)
         else:
+            # case ["pt", "eta", "phi"]
             no_elements = 3
             pt = objectNumpy[:,:,0]
-            log_pt = np.sign(pt)*np.log(1+np.abs(pt))
+            log_pt = np.log(1+pt) #sign and abs not necessary
             objectNumpy[:,:,0] = log_pt
             
             log_objectTensor = torch.tensor(objectNumpy, dtype=torch.float)
