@@ -6,26 +6,19 @@ import os
 if __name__ == '__main__':
         
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_dataset', type=str, required=True, help='Path to dataset file')
+    parser.add_argument('--input_dataset', type=str, required=True, help='Path to dataset file')
     parser.add_argument('--name', type=str, default='TEST', help='name of config (by default: \'TEST\')')
     parser.add_argument('--version', type=str, default='v0', help='version of config (by default: \'v0\')')
     parser.add_argument('--description', type=str, default='', help='description of config (by default: \'\')')
     parser.add_argument('--numberJets', type=int, default=15, help='number of jets in one event (by default: 15)')
-    parser.add_argument('--jetsFeatures', type=int, default=5, help='number of jets features (by default: 5)')
     parser.add_argument('--numberLept', type=int, default=1, help='number of leptons in one event (by default: 1)')
-    parser.add_argument('--leptonFeatures', type=int, default=3, help='number of lepton features (by default: 3)')
-    parser.add_argument('--cond_outFeatures', type=int, default=32,
-                        help='size of output of conditional transformer (by default: 32)')
-    parser.add_argument('--cond_nHead', type=int, default=1, 
-                        help='number of heads in multihead attention of conditional transformer (by default: 1)')
-    parser.add_argument('--cond_noLayers', type=int, default=3,
-                        help='number of layers in conditional transformer (by default: 3)')
+    parser.add_argument('--inputFeatures', type=int, default=5, help='number of input features (by default: 5)')
+
     parser.add_argument('--flow_nFeatures', type=int, default=10, help='number of features in NF (by default: 10)')
     parser.add_argument('--flow_nCond', type=int, default=34, help='number of context features in NF (by default: 34)')
     parser.add_argument('--flow_nTransforms', type=int, default=5, help='number of transformations in NF (by default: 5)')
     parser.add_argument('--flow_bins', type=int, default=32, help='number of bins in NF (by default: 32)')
-    parser.add_argument('--flow_autoregressive', type=bool, default=True,
-                        help='type of transformations in NF (by default: True - autoregressive)')
+    parser.add_argument('--flow_autoregressive', action=argparse.BooleanOptionalAction, default=True, help='type of transformations in NF (by default: True - autoregressive)')
     parser.add_argument('--training_batchSizeTraining', type=int, default=2048,
                         help='batch size for training data (by default: 2048)')
     parser.add_argument('--training_batchSizeValid', type=int, default=2048,
@@ -38,6 +31,16 @@ if __name__ == '__main__':
 
     parser.add_argument('--flow_hidden_layers', type=int, default=4, help='number of hidden layers in NF (by default: 4)')
     parser.add_argument('--flow_hidden_layersSize', type=int, default=128, help='size of hidden layers in NF (by default: 128)')
+
+    parser.add_argument('--cond_outFeatures', type=int, default=4, help='No of output features of CondTransformer (by default: 4 - 4 momenta)')
+    parser.add_argument('--cond_hiddenFeatures', type=int, default=32, help='No of hidden features in CondTransformer (by default: 32)')
+    parser.add_argument('--cond_DimFeedForwardTransf', type=int, default=512, help='No. dimensions of FeedForward Transformer in CondTransformer (by default: 512)')
+    parser.add_argument('--cond_nHeadEncoder', type=int, default=2, help='No. of Heads in multihead attention for Encoders in CondTransformer (by default: 2)')
+    parser.add_argument('--cond_noLayersEncoder', type=int, default=3, help='No. of Encoder layers in CondTransformer (by default: 3)')
+    parser.add_argument('--cond_nHeadDecoder', type=int, default=1, help='No. of Heads in multihead attention of Decoders in CondTransformer (by default: 1)')
+    parser.add_argument('--cond_noLayersDecoder', type=int, default=1, help='No. of Decoder layers in CondTransformer (by default: 1)')
+    parser.add_argument('--cond_aggregate', action=argparse.BooleanOptionalAction, default=False, help='set aggregate in CondTransformer (by default: False)')
+    parser.add_argument('--cond_noDecoders', type=int, default=3, help='No. of Decoders in CondTransformer (by default: 3)')
     args = parser.parse_args()
     print(args)
         
@@ -45,17 +48,11 @@ if __name__ == '__main__':
         "name": args.name,
         "version": args.version,
         "description": args.description,
-        "input_dataset": args.path_to_dataset,
+        "input_dataset": args.input_dataset,
         "input_shape": {
             "number_jets": args.numberJets,
-            "jets_features": args.jetsFeatures,
             "number_lept": args.numberLept,
-            "lepton_features": args.leptonFeatures
-        },
-        "conditioning_transformer":{
-            "out_features": args.cond_outFeatures,
-            "nhead": args.cond_nHead,
-            "no_layers": args.cond_noLayers
+            "input_features": args.inputFeatures
         },
         "unfolding_flow":{
             "nfeatures": args.flow_nFeatures,
@@ -71,9 +68,20 @@ if __name__ == '__main__':
             "batch_size_training": args.training_batchSizeTraining,
             "batch_size_validation": args.training_batchSizeValid,
             "nepochs": args.nEpochs,
-            "traning_sample": args.training_sampleDim,
+            "training_sample": args.training_sampleDim,
             "validation_sample": args.valid_sampleDim,
             "sampling_points": args.sampling_points
+        },
+        "conditioning_transformer":{
+            "out_features": args.cond_outFeatures, # the 4 momenta
+            "hidden_features": args.cond_hiddenFeatures,
+            "dim_feedforward_transformer": args.cond_DimFeedForwardTransf,
+            "nhead_encoder": args.cond_nHeadEncoder,
+            "no_layers_encoder": args.cond_noLayersEncoder,
+            "nhead_decoder": args.cond_nHeadDecoder,
+            "no_layers_decoder": args.cond_noLayersDecoder,
+            "aggregate": args.cond_aggregate,
+            "no_decoders": args.cond_noDecoders
         }
     }
 
