@@ -68,7 +68,7 @@ python -m ipykernel install --user --name=myenv
 
 To run it with a minimum number of arguments:
 ```
-python memflow/unfolding_flow/generate_config.py --path_to_dataset=<path-to-Dataset>
+python memflow/unfolding_flow/generate_config.py --input_dataset=<path-to-Dataset>
 ```
 For a full list of arguments, run:
 ```
@@ -80,18 +80,33 @@ python memflow/unfolding_flow/generate_config.py -h
 
 To run it:
 ```
-python scripts/run_generate_config.py --path_to_dataset=<path-to-Dataset> --maxFiles=-1
+python scripts/run_generate_config.py --input_dataset=<path-to-Dataset> --maxFiles=-1 <--preTraining>
 ```
 
-The argument maxFiles represent the maximum number of config files generated. By default, it is -1 (generate all possible config files).
+The argument maxFiles represent the maximum number of config files generated. By default, it is -1 (generate all possible config files). The preTraining flag makes the script iterate only on the condTransformer hyperparameters (unfolding flow parameters are set to the default value).
 
 ## scripts/run\_model.py
 - Run the model (training and validate loops) for a specific config files. 
 
 To run it:
 ```
-python scripts/run_model.py --path_config=<path-configFile> --on_CPU 0
+python scripts/run_model.py --path_config=<path-configFile> <--on-GPU>
 ```
 
-By default, on\_CPU argument is set to 0 (run on GPU). If it set to 1, the code will run on CPU
+By default, the script is running on CPU. If `--on-GPU` flag is added, the script will run on GPU.
+
+## scripts/run\_model.py
+- Send jobs:
+
+To run it:
+```
+python scripts/sendJobs.py --config-directory=<configDir> <--on-GPU> <--preTraining>
+```
+
+By default, the script is running on CPU. If `--on-GPU` flag is added, the script will run on GPU.
+The script will iterate over `config-Directory` and will send a job for every config file.
+If `--preTraining` flag is set, the script will send jobs for `run_pretraining.py`, otherwise it will send jobs
+for `run_model.py`
+
+CAREFUL! Some paths are already set in the script, so modify them before using!!
 

@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config-directory', type=str, required=True, help='path to config.yaml directory')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
+    parser.add_argument('--preTraining', action="store_true",  help='run the preTraining script (by default: run `run_model.py`)')
     args = parser.parse_args()
     
     conf_dir = args.config_directory
@@ -33,9 +34,13 @@ if __name__ == '__main__':
     else:
         on_GPU = ''
     
-    # get path of 'run_model' script
-    scriptPath = str(pathlib.Path(__file__).parent.resolve()) + "/run_model.py"
+    # get path of the script used
+    if args.preTraining:
+        scriptPath = str(pathlib.Path(__file__).parent.resolve()) + "/run_pretraining.py"
+    else:
+        scriptPath = str(pathlib.Path(__file__).parent.resolve()) + "/run_model.py"
     
+    print(scriptPath)
     # get absolute paths of all config files in conf_dir
     confFiles = absoluteFilePaths(conf_dir)
     
@@ -60,7 +65,7 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --account=gpu_gres\n")
             fh.writelines("#SBATCH --partition=gpu\n")
             fh.writelines("#SBATCH --nodes=1        # request to run job on single node\n")
-            fh.writelines("#SBATCH --ntasks=5       # request 5 CPU's\n")
+            fh.writelines("#SBATCH --ntasks=10       # request 10 CPU's\n")
             fh.writelines("#SBATCH --gres=gpu:1     # request 1 GPU's on machine\n")
             fh.writelines("#SBATCH --mem=4000M      # memory (per job)\n")
             fh.writelines("#SBATCH --time=0-00:30   # time  in format DD-HH:MM\n")    

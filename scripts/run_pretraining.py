@@ -1,34 +1,34 @@
-from torch.utils.data import DataLoader
-import torch.nn as nn
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-import plot_loss
-from torch import optim
-from tqdm.notebook import trange
-
 from memflow.read_data.dataset_all import DatasetCombined
 from memflow.unfolding_network.conditional_transformer import ConditioningTransformerLayer
+from memflow.unfolding_flow.utils import *
+
+import numpy as np
+import torch
+from torch import optim
+from torch.utils.data import DataLoader
+import torch.nn as nn
+from torch.nn.functional import normalize
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 from tensorboardX import SummaryWriter
-
-from torch.nn.functional import normalize
-from sklearn.preprocessing import StandardScaler
-
-from memflow.unfolding_flow.utils import *
-torch.cuda.empty_cache()
-
+from omegaconf import OmegaConf
 import sys
 import argparse
 import os
+from pynvml import *
+
+torch.cuda.empty_cache()
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         
     loss_fn = torch.nn.MSELoss()
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
+    scheduler = ReduceLROnPlateau(optimizer, 'min')
     
-    name_dir = f'{os.getcwd()}/results/runs/{conf.name}_{conf.version}'
+    name_dir = f'{os.getcwd()}/results_preTraining/runs/{conf.name}_{conf.version}'
     writer = SummaryWriter(name_dir)
     
     N_train = len(trainingLoader)
@@ -116,14 +116,14 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
                         for feature in range(4):
 
                             fig, ax = plt.subplots()
-                            h = ax.hist2d(out[particle_correct_order][:,feature].cpu().detach().numpy().flatten(),
+                            h = ax.hist2d(out[particle][:,feature].cpu().detach().numpy().flatten(),
                                           target[:,particle,feature].detach().cpu().numpy(),
                                           bins=50, range=((0, 1),(0, 1)))
                             fig.colorbar(h[3], ax=ax)
                             writer.add_figure(f"Validation_particleNo_{particle}_Feature_{feature}", fig, e)
 
                             fig, ax = plt.subplots()
-                            h = ax.hist((out[particle_correct_order][:,feature].cpu().detach().numpy().flatten() - \
+                            h = ax.hist((out[particle][:,feature].cpu().detach().numpy().flatten() - \
                                          target[:,particle,feature].detach().cpu().numpy()), bins=100)
                             writer.add_figure(f"Validation_particleNo_{particle}__Feature_{feature}_Diff", fig, e)
          
@@ -133,15 +133,20 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         writer.add_scalar('Loss_epoch_val_Tlep', valid_lossTlep/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
 
-        writer.close()
+        scheduler.step(valid_loss) # reduce lr if the model is not improving anymore
+
+    writer.close()
         
-    resultsDir = f"{os.getcwd()}/results/logs/model_{config.name}_{config.version}"
-        
+    resultsDir = f"{os.getcwd()}/results_preTraining/logs"
+    if not os.path.exists(resultsDir):
+        os.makedirs(resultsDir)
+
+    modelName = f"{os.getcwd()}/results_preTraining/logs/model_{config.name}_{config.version}.pt"
+
     torch.save({
-        'modelA_state_dict': model.state_dict(),
-        'optimizerA_state_dict': optimizer.state_dict()
-        }, resultsDir)
-        
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()
+        }, modelName)
         
 
 if __name__ == '__main__':
@@ -184,7 +189,7 @@ if __name__ == '__main__':
     
     # split data for training sample and validation sample
     train_subset, val_subset = torch.utils.data.random_split(
-            data_cuda, [conf.training_params.traning_sample, conf.training_params.validation_sample],
+            data, [conf.training_params.training_sample, conf.training_params.validation_sample],
             generator=torch.Generator().manual_seed(1))
     
     train_loader = DataLoader(dataset=train_subset, shuffle=True, batch_size=conf.training_params.batch_size_training)
@@ -203,14 +208,35 @@ if __name__ == '__main__':
                                     no_layers_decoder=conf.conditioning_transformer.no_layers_decoder,
                                     no_decoders=conf.conditioning_transformer.no_decoders,
                                     aggregate=conf.conditioning_transformer.aggregate,
-                                    dtype=torch.float64).cuda()
+                                    dtype=torch.float64)
     
+    if (device == torch.device('cuda')):
+        nvmlInit()
+        h = nvmlDeviceGetHandleByIndex(0)
+        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+        info = nvmlDeviceGetMemoryInfo(h)
+        print(f'total    : {info.total}')
+        print(f'free     : {info.free}')
+        print(f'used     : {info.used}')
+        nvmlShutdown()
+
     # Copy model on GPU memory
     if (device == torch.device('cuda')):
         model = model.cuda()
 
-    print(f"parameters total:{utils.count_parameters(model)}")
-    
+
+    if (device == torch.device('cuda')):
+        nvmlInit()
+        h = nvmlDeviceGetHandleByIndex(0)
+        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+        info = nvmlDeviceGetMemoryInfo(h)
+        print(f'total    : {info.total}')
+        print(f'free     : {info.free}')
+        print(f'used     : {info.used}')
+        nvmlShutdown()
+
+
+    print(f"parameters total:{count_parameters(model)}")
     if (device == torch.device('cuda')):
         
         # TODO: split the data for multi-GPU processing
@@ -232,6 +258,7 @@ if __name__ == '__main__':
         TrainingAndValidLoop(conf, model, train_loader, val_loader)
         
     
+    print("PreTraining finished succesfully!")
     
     
     

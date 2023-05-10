@@ -101,16 +101,20 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
                         bins=100)
                     writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
-        writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
+            writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
 
-        writer.close()
+    writer.close()
         
-        resultsDir = f"{os.getcwd()}/results/logs/result_{config.name}_{config.version}"
-        
-        torch.save({
-            'modelA_state_dict': model.state_dict(),
-            'optimizerA_state_dict': optimizer.state_dict()
-            }, resultsDir)
+    resultsDir = f"{os.getcwd()}/results/logs"
+    if not os.path.exists(resultsDir):
+        os.makedirs(resultsDir)
+
+    modelName = f"{os.getcwd()}/results/logs/model_{config.name}_{config.version}.pt"
+
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()
+        }, modelName)
         
         
 
@@ -201,6 +205,7 @@ if __name__ == '__main__':
     else:
         TrainingAndValidLoop(conf, model, train_loader, val_loader)
         
+    print("Training finished succesfully!")
     
     
     
