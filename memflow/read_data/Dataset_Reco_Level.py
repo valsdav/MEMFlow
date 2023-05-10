@@ -21,6 +21,8 @@ class Dataset_RecoLevel(Dataset):
             "recoParticles_Cartesian": ["E", "px", "py", "pz"]
         }
 
+        NUMBER_TOTAL_FILES_JETS  = 12
+        print(f"NUMBER_TOTAL_FILES_JETS = {NUMBER_TOTAL_FILES_JETS}")
         self.debug = debug
         self.root = root
         self.reco_list = reco_list
@@ -51,36 +53,53 @@ class Dataset_RecoLevel(Dataset):
                 print("recoParticles_Cartesian file already exists")
                 
         self.mask_jets, self.data_jets = torch.load(
-            self.processed_file_names("jets"))
+            self.processed_file_names("jets"), map_location=torch.device('cpu'))
         self.mask_lepton, self.data_lepton = torch.load(
-            self.processed_file_names("lepton_reco"))
+            self.processed_file_names("lepton_reco"), map_location=torch.device('cpu'))
         self.mask_met, self.data_met = torch.load(
-            self.processed_file_names("met"))
+            self.processed_file_names("met"), map_location=torch.device('cpu'))
         self.mask_boost, self.data_boost = torch.load(
-            self.processed_file_names("boost"))
+            self.processed_file_names("boost"), map_location=torch.device('cpu'))
         
         self.recoParticlesCartesian = torch.load(
-            self.processed_file_names("recoParticles_Cartesian"))
+            self.processed_file_names("recoParticles_Cartesian"), map_location=torch.device('cpu'))
         
-        if not os.path.isfile(self.processed_file_names("scaledLogRecoParticles")):
+        # if there are less files than number of total_load => create new file for logData
+        if len(os.listdir(self.root + '/processed_jets/')) < NUMBER_TOTAL_FILES_JETS:
                 print("Create new file for LogData")
                 self.scaleObjects()
         else:
                 print("LogData file already exists")
         
-        self.recoParticles = torch.load(self.processed_file_names('recoParticles'))
+        self.recoParticles = torch.load(self.processed_file_names('recoParticles'), map_location=torch.device('cpu'))
         
-        self.scaledLogJets, self.LogJets, self.meanJets, self.stdJets = torch.load(self.processed_file_names('scaledLogJets'))
-        self.scaledLogLepton, self.LogLepton, self.meanLepton, self.stdLepton = \
-                                            torch.load(self.processed_file_names('scaledLogLepton'))
-        self.scaledLogMet, self.LogMet, self.meanMet, self.stdMet = \
-                                            torch.load(self.processed_file_names('scaledLogMet'))
-        self.scaledLogBoost, self.LogBoost, self.meanBoost, self.stdBoost = \
-                                            torch.load(self.processed_file_names('scaledLogBoost'))
-        self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian, self.meanRecoCartesian, self.stdRecoCartesian = \
-                                            torch.load(self.processed_file_names('scaledLogRecoParticlesCartesian'))
-        self.scaledLogRecoParticles, self.LogRecoParticles, self.meanRecoParticles, self.stdRecoParticles = \
-                                            torch.load(self.processed_file_names('scaledLogRecoParticles'))
+        if 'scaledLogJets' in self.reco_list:
+            self.scaledLogJets, self.LogJets, self.meanJets, self.stdJets = torch.load(self.processed_file_names('scaledLogJets'),
+                                                                            map_location=torch.device('cpu'))
+
+        if 'scaledLogLepton' in self.reco_list:
+            self.scaledLogLepton, self.LogLepton, self.meanLepton, self.stdLepton = \
+                                            torch.load(self.processed_file_names('scaledLogLepton'),
+                                                        map_location=torch.device('cpu'))
+        if 'scaledLogMet' in self.reco_list:
+            self.scaledLogMet, self.LogMet, self.meanMet, self.stdMet = \
+                                            torch.load(self.processed_file_names('scaledLogMet'),
+                                                        map_location=torch.device('cpu'))
+        
+        if 'scaledLogBoost' in self.reco_list:
+            self.scaledLogBoost, self.LogBoost, self.meanBoost, self.stdBoost = \
+                                            torch.load(self.processed_file_names('scaledLogBoost'),
+                                                        map_location=torch.device('cpu'))
+        
+        if 'scaledLogRecoParticlesCartesian' in self.reco_list:
+            self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian, self.meanRecoCartesian, self.stdRecoCartesian = \
+                                            torch.load(self.processed_file_names('scaledLogRecoParticlesCartesian'),
+                                                        map_location=torch.device('cpu'))
+
+        if 'scaledLogRecoParticles' in self.reco_list:
+            self.scaledLogRecoParticles, self.LogRecoParticles, self.meanRecoParticles, self.stdRecoParticles = \
+                                            torch.load(self.processed_file_names('scaledLogRecoParticles'),
+                                                        map_location=torch.device('cpu'))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
             for field in self.reco_list:

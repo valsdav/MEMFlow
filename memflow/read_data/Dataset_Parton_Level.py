@@ -27,16 +27,18 @@ class Dataset_PartonLevel(Dataset):
             "H_thad_tlep_ISR_cartesian": ["E", "px", "py", "pz"]
         }
         
-        
+        NUMBER_TOTAL_FILES_PARTONS  = 10
+        print(f"NUMBER_TOTAL_FILES_PARTONS = {NUMBER_TOTAL_FILES_PARTONS}")
         self.debug = debug
         self.root = root
         self.parton_list = parton_list
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
         self.object_types = object_types
 
-        (self.partons_boosted, self.leptons_boosted,
-         self.higgs_boosted, self.generator,
-         self.gluon_ISR, self.boost) = self.get_PartonsAndLeptonsAndBoost()
+        if len(os.listdir(self.root + '/processed_partons/')) < NUMBER_TOTAL_FILES_PARTONS:
+            (self.partons_boosted, self.leptons_boosted,
+            self.higgs_boosted, self.generator,
+            self.gluon_ISR, self.boost) = self.get_PartonsAndLeptonsAndBoost()
 
         for object_type in self.object_types:
             if not os.path.isfile(self.processed_file_names(object_type)):
@@ -61,11 +63,19 @@ class Dataset_PartonLevel(Dataset):
         self.data_higgs_t_tbar_ISR_cartesian = torch.load(
             self.processed_file_names("H_thad_tlep_ISR_cartesian"))
 
-        self.get_PS_intermediateParticles()
-        self.phasespace_intermediateParticles = torch.load(
-            self.processed_file_names("phasespace_intermediateParticles"))
-        self.phasespace_rambo_detjacobian = torch.load(
-            self.processed_file_names("phasespace_rambo_detjacobian"))
+        if not os.path.isfile(self.processed_file_names("phasespace_intermediateParticles")):
+            print("Create new file for PhaseSpace + rambo detJacobian")
+            self.get_PS_intermediateParticles()
+        else:
+            print("PhaseSpace and rambo detJacobian already exists")
+        
+        if "phasespace_intermediateParticles" in self.parton_list:
+            self.phasespace_intermediateParticles = torch.load(
+                self.processed_file_names("phasespace_intermediateParticles"))
+
+        if "phasespace_rambo_detjacobian" in self.parton_list:
+            self.phasespace_rambo_detjacobian = torch.load(
+                self.processed_file_names("phasespace_rambo_detjacobian"))
                 
         if not os.path.isfile(self.processed_file_names('Log_H_thad_tlep_ISR_cartesian')):
             print("Create new file for Log_H_thad_tlep_ISR_cartesian")
@@ -75,10 +85,12 @@ class Dataset_PartonLevel(Dataset):
             
         self.log_data_higgs_t_tbar_ISR_cartesian = torch.load(
             self.processed_file_names("Log_H_thad_tlep_ISR_cartesian"))
-        self.mean_log_data_higgs_t_tbar_ISR_cartesian, self.std_log_data_higgs_t_tbar_ISR_cartesian = torch.load(
-            self.processed_file_names("Log_mean_std_H_thad_tlep_ISR_cartesian"))
-        self.logScaled_data_higgs_t_tbar_ISR_cartesian = torch.load(
-            self.processed_file_names("LogScaled_H_thad_tlep_ISR_cartesian"))
+        
+        if 'logScaled_data_higgs_t_tbar_ISR_cartesian' in self.parton_list:
+            self.mean_log_data_higgs_t_tbar_ISR_cartesian, self.std_log_data_higgs_t_tbar_ISR_cartesian = torch.load(
+                self.processed_file_names("Log_mean_std_H_thad_tlep_ISR_cartesian"))
+            self.logScaled_data_higgs_t_tbar_ISR_cartesian = torch.load(
+                self.processed_file_names("LogScaled_H_thad_tlep_ISR_cartesian"))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
             for field in self.parton_list:
