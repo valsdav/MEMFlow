@@ -8,7 +8,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.functional import normalize
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -26,7 +26,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         
     loss_fn = torch.nn.MSELoss()
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
-    scheduler = ReduceLROnPlateau(optimizer, 'min')
+    scheduler = CosineAnnealingLR(optimizer, T_max=10)
     
     name_dir = f'{os.getcwd()}/results_preTraining/runs/{conf.name}_{conf.version}'
     writer = SummaryWriter(name_dir)
@@ -35,6 +35,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
     N_valid = len(validLoader)
     
     ii = 0
+    trainingLoss_Epoch = [0]*config.training_params.nepochs
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
@@ -50,24 +51,26 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
             optimizer.zero_grad()
             
             (logScaled_data_higgs_t_tbar_ISR_cartesian, 
-            scaledLogRecoParticles, mask_lepton_reco, 
+            scaledLogRecoParticlesCartesian, mask_lepton_reco, 
             mask_jets, mask_met, 
             mask_boost_reco, data_boost_reco) = data
             
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
-            out = model(scaledLogRecoParticles, data_boost_reco, mask_recoParticles, mask_boost_reco)
+            out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
             target = data[0]
         
             lossH = loss_fn(target[:,0], out[0])
             lossThad =  loss_fn(target[:,1], out[1])
             lossTlep =  loss_fn(target[:,2], out[2])
+            lossISR =  loss_fn(target[:,3], out[3])
             writer.add_scalar('loss_H', lossH.item(), ii)
             writer.add_scalar('loss_Thad', lossThad.item(), ii)
             writer.add_scalar('loss_Tlep', lossTlep.item(), ii)
+            writer.add_scalar('loss_ISR', lossISR.item(), ii)
 
-            loss = lossH + lossThad + lossTlep
+            loss = lossH + lossThad + lossTlep + lossISR
             
             loss.backward()
             optimizer.step()
@@ -81,6 +84,13 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         valid_lossH = 0
         valid_lossTlep = 0
         valid_lossThad = 0
+        valid_lossISR = 0
+
+        trainingLoss_Epoch[e] = sum_loss/N_train
+        if (e > 10):
+            if (abs(trainingLoss_Epoch[e-10] - trainingLoss_Epoch[e]) < 1e-5):
+                print(f"Convergence of loss at epoch: {e}")
+                break
  
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
@@ -89,36 +99,37 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
             with torch.no_grad():
 
                 (logScaled_data_higgs_t_tbar_ISR_cartesian, 
-                scaledLogRecoParticles, mask_lepton_reco, 
+                scaledLogRecoParticlesCartesian, mask_lepton_reco, 
                 mask_jets, mask_met, 
                 mask_boost_reco, data_boost_reco) = data
                 
                 mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
         
-                out = model(scaledLogRecoParticles, data_boost_reco, mask_recoParticles, mask_boost_reco)
+                out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
                 target = data[0]
 
                 lossH = loss_fn(target[:,0], out[0])
                 lossThad =  loss_fn(target[:,1], out[1])
                 lossTlep =  loss_fn(target[:,2], out[2])
+                lossISR =  loss_fn(target[:,3], out[3])
 
-                loss = lossH + lossThad + lossTlep
+                loss = lossH + lossThad + lossTlep + valid_lossISR
                 valid_loss += loss.item()
                 valid_lossH += lossH.item()
                 valid_lossTlep += lossTlep.item()
                 valid_lossThad += lossThad.item()
+                valid_lossISR += lossISR.item()
 
                 
-
                 if i == 0:
-                    for particle in range(3):
+                    for particle in range(4): # 4 particles: higgs/thad/tlep/gluonISR
                         for feature in range(4):
 
                             fig, ax = plt.subplots()
                             h = ax.hist2d(out[particle][:,feature].cpu().detach().numpy().flatten(),
                                           target[:,particle,feature].detach().cpu().numpy(),
-                                          bins=50, range=((0, 1),(0, 1)))
+                                          bins=100, range=((-3, 3),(-3, 3)))
                             fig.colorbar(h[3], ax=ax)
                             writer.add_figure(f"Validation_particleNo_{particle}_Feature_{feature}", fig, e)
 
@@ -132,21 +143,21 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         writer.add_scalar('Loss_epoch_val_H', valid_lossH/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Tlep', valid_lossTlep/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
+        writer.add_scalar('Loss_epoch_val_ISR', valid_lossISR/N_valid, e)
 
         scheduler.step(valid_loss) # reduce lr if the model is not improving anymore
 
     writer.close()
-        
-    resultsDir = f"{os.getcwd()}/results_preTraining/logs"
-    if not os.path.exists(resultsDir):
-        os.makedirs(resultsDir)
 
-    modelName = f"{os.getcwd()}/results_preTraining/logs/model_{config.name}_{config.version}.pt"
+    modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
 
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict()
         }, modelName)
+
+    with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
+        fo.write(OmegaConf.to_yaml(config)) 
         
 
 if __name__ == '__main__':
@@ -182,7 +193,7 @@ if __name__ == '__main__':
     
     # READ data
     data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
-                            reco_list=['scaledLogRecoParticles', 'mask_lepton', 
+                            reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
                                         'mask_jets','mask_met',
                                         'mask_boost', 'data_boost'],
                             parton_list=['logScaled_data_higgs_t_tbar_ISR_cartesian'])
