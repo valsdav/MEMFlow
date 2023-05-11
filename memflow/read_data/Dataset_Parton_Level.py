@@ -16,7 +16,7 @@ torch.set_default_dtype(torch.double)
 class Dataset_PartonLevel(Dataset):
     def __init__(self, root, object_types=["partons", "lepton_partons", "boost",
                                            "H_thad_tlep_ISR", "H_thad_tlep_ISR_cartesian"], dev=None, debug=False,
-                 dtype=None, parton_list=[]):
+                 dtype=None, build=False, parton_list=[]):
 
         self.fields = {
             "partons": ["pt", "eta", "phi", "mass", "pdgId", "prov"],
@@ -27,21 +27,22 @@ class Dataset_PartonLevel(Dataset):
             "H_thad_tlep_ISR_cartesian": ["E", "px", "py", "pz"]
         }
         
-        NUMBER_TOTAL_FILES_PARTONS  = 10
-        print(f"NUMBER_TOTAL_FILES_PARTONS = {NUMBER_TOTAL_FILES_PARTONS}")
+        print("\nPartonLevel")
         self.debug = debug
         self.root = root
         self.parton_list = parton_list
         os.makedirs(self.root + "/processed_partons", exist_ok=True)
         self.object_types = object_types
+        self.build = build
 
-        if len(os.listdir(self.root + '/processed_partons/')) < NUMBER_TOTAL_FILES_PARTONS:
+        # if build flag set and number of files in processed partons directory is 0
+        if (build and len(os.listdir(self.root + '/processed_partons/')) == 0):
+
             (self.partons_boosted, self.leptons_boosted,
             self.higgs_boosted, self.generator,
             self.gluon_ISR, self.boost) = self.get_PartonsAndLeptonsAndBoost()
 
-        for object_type in self.object_types:
-            if not os.path.isfile(self.processed_file_names(object_type)):
+            for object_type in self.object_types:
                 print("Create new file for " + object_type)
                 if object_type == "H_thad_tlep_ISR":
                     self.process_intermediateParticles()
@@ -49,8 +50,20 @@ class Dataset_PartonLevel(Dataset):
                     self.process_intermediateParticles_cartesian()
                 else:
                     self.process(object_type)
-            else:
-                print(object_type + " file already exists")
+            
+            # need these files for the next operations
+            self.mask_boost, self.data_boost = torch.load(
+                                    self.processed_file_names("boost"))
+            self.data_higgs_t_tbar_ISR_cartesian = torch.load(
+                                    self.processed_file_names("H_thad_tlep_ISR_cartesian"))
+
+            print("Create new file for PhaseSpace + rambo detJacobian")
+            self.get_PS_intermediateParticles()
+
+            print("Create new file for Log_H_thad_tlep_ISR_cartesian")
+            self.ProcessCartesianScaled()
+
+        print("Reading parton_level Files")
 
         self.mask_partons, self.data_partons = torch.load(
             self.processed_file_names("partons"))
@@ -62,37 +75,31 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("H_thad_tlep_ISR"))
         self.data_higgs_t_tbar_ISR_cartesian = torch.load(
             self.processed_file_names("H_thad_tlep_ISR_cartesian"))
-
-        if not os.path.isfile(self.processed_file_names("phasespace_intermediateParticles")):
-            print("Create new file for PhaseSpace + rambo detJacobian")
-            self.get_PS_intermediateParticles()
-        else:
-            print("PhaseSpace and rambo detJacobian already exists")
         
-        if "phasespace_intermediateParticles" in self.parton_list:
+        if 'phasespace_intermediateParticles' in self.parton_list:
+            print("Load phasespace_intermediateParticles")
             self.phasespace_intermediateParticles = torch.load(
                 self.processed_file_names("phasespace_intermediateParticles"))
 
-        if "phasespace_rambo_detjacobian" in self.parton_list:
+        if 'phasespace_rambo_detjacobian' in self.parton_list:
+            print("Load phasespace_rambo_detjacobian")
             self.phasespace_rambo_detjacobian = torch.load(
                 self.processed_file_names("phasespace_rambo_detjacobian"))
-                
-        if not os.path.isfile(self.processed_file_names('Log_H_thad_tlep_ISR_cartesian')):
-            print("Create new file for Log_H_thad_tlep_ISR_cartesian")
-            self.ProcessCartesianScaled()
-        else:
-            print("Log_H_thad_tlep_ISR_cartesian file already exists")
-            
-        self.log_data_higgs_t_tbar_ISR_cartesian = torch.load(
-            self.processed_file_names("Log_H_thad_tlep_ISR_cartesian"))
+        
+        if 'Log_H_thad_tlep_ISR_cartesian' in self.parton_list:
+            print("Load Log_H_thad_tlep_ISR_cartesian")
+            self.log_data_higgs_t_tbar_ISR_cartesian = torch.load(
+                self.processed_file_names("Log_H_thad_tlep_ISR_cartesian"))
         
         if 'logScaled_data_higgs_t_tbar_ISR_cartesian' in self.parton_list:
+            print("Load logScaled_data_higgs_t_tbar_ISR_cartesian")
             self.mean_log_data_higgs_t_tbar_ISR_cartesian, self.std_log_data_higgs_t_tbar_ISR_cartesian = torch.load(
                 self.processed_file_names("Log_mean_std_H_thad_tlep_ISR_cartesian"))
             self.logScaled_data_higgs_t_tbar_ISR_cartesian = torch.load(
                 self.processed_file_names("LogScaled_H_thad_tlep_ISR_cartesian"))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
+            print("Parton: Move tensors to GPU memory")
             for field in self.parton_list:
                 setattr(self, field, getattr(self, field).to(dev)) # move elements from reco_list to GPU memory
             
@@ -242,7 +249,6 @@ class Dataset_PartonLevel(Dataset):
                 intermediate_np = np.concatenate(
                     (intermediate_np, d_list), axis=1)
 
-        print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names("H_thad_tlep_ISR"))
 
@@ -270,7 +276,6 @@ class Dataset_PartonLevel(Dataset):
                 intermediate_np = np.concatenate(
                     (intermediate_np, d_list), axis=1)
 
-        print(intermediate_np.shape)
         tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names(
             "H_thad_tlep_ISR_cartesian"))
