@@ -145,7 +145,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
         writer.add_scalar('Loss_epoch_val_ISR', valid_lossISR/N_valid, e)
 
-        scheduler.step(valid_loss) # reduce lr if the model is not improving anymore
+        scheduler.step() # reduce lr if the model is not improving anymore
 
     writer.close()
 
@@ -226,7 +226,7 @@ if __name__ == '__main__':
         h = nvmlDeviceGetHandleByIndex(0)
         # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
         info = nvmlDeviceGetMemoryInfo(h)
-        print(f'total    : {info.total}')
+        print(f'\ntotal    : {info.total}')
         print(f'free     : {info.free}')
         print(f'used     : {info.used}')
         nvmlShutdown()
@@ -234,18 +234,6 @@ if __name__ == '__main__':
     # Copy model on GPU memory
     if (device == torch.device('cuda')):
         model = model.cuda()
-
-
-    if (device == torch.device('cuda')):
-        nvmlInit()
-        h = nvmlDeviceGetHandleByIndex(0)
-        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
-        info = nvmlDeviceGetMemoryInfo(h)
-        print(f'total    : {info.total}')
-        print(f'free     : {info.free}')
-        print(f'used     : {info.used}')
-        nvmlShutdown()
-
 
     print(f"parameters total:{count_parameters(model)}")
     if (device == torch.device('cuda')):
