@@ -68,7 +68,7 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --ntasks=10       # request 10 CPU's\n")
             fh.writelines("#SBATCH --gres=gpu:1     # request 1 GPU's on machine\n")
             fh.writelines("#SBATCH --mem=4000M      # memory (per job)\n")
-            fh.writelines("#SBATCH --time=0-00:30   # time  in format DD-HH:MM\n")    
+            fh.writelines("#SBATCH --time=1-00:00   # time  in format DD-HH:MM\n")    
             
             fh.writelines("\n\n")
             fh.writelines("# Activate environment:\n")

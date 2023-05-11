@@ -63,20 +63,8 @@ python -m ipykernel install --user --name=myenv
 
 # How to run the scripts:
 
-## memflow/unfolding\_flow/generate\_config.py
-- Create yaml file which keeps: input dataset, input shape, model and training parameters. The yaml files are created in `scripts/configs`
-
-To run it with a minimum number of arguments:
-```
-python memflow/unfolding_flow/generate_config.py --input_dataset=<path-to-Dataset>
-```
-For a full list of arguments, run:
-```
-python memflow/unfolding_flow/generate_config.py -h
-```
-
 ## scripts/run\_generate\_config.py
-- Create multiple config files. All the possible configurations will be generated (as an example iterate over learning-rate list, hidden-layers list etc.).
+- Create multiple config files. All the possible configurations will be generated (as an example iterate over learning-rate list, hidden-layers list etc.). The config file keeps: input dataset, input shape, model and training parameters.
 
 To run it:
 ```
@@ -95,7 +83,7 @@ python scripts/run_model.py --path_config=<path-configFile> <--on-GPU>
 
 By default, the script is running on CPU. If `--on-GPU` flag is added, the script will run on GPU.
 
-## scripts/run\_model.py
+## scripts/sendJobs.py
 - Send jobs:
 
 To run it:

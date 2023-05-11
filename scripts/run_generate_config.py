@@ -2,6 +2,7 @@ import sys
 import subprocess
 import argparse
 import os
+from omegaconf import OmegaConf
 
 if __name__ == '__main__':
     
@@ -19,24 +20,24 @@ if __name__ == '__main__':
         name = 'MEMFlow'
     description = ''
     numberJets = 15
-    inputFeatures = 5
+    inputFeatures = 6
     numberLept = 1
     training_batchSizeTraining = 2048
     training_batchSizeValid = 2048
-    nEpochs = 200
+    nEpochs = 1000
     training_sampleDim = 500000
     valid_sampleDim = 69993
     sampling_points = 100
     
     cond_outFeatures = [4]
-    cond_hiddenFeatures = [32, 64, 128]
+    cond_hiddenFeatures = [16, 32, 64]
     cond_DimFeedForwardTransf = [512, 1024, 2048]
-    cond_nHeadEncoder = [2]
-    cond_noLayersEncoder = [3, 4, 5]
-    cond_nHeadDecoder = [1, 2]
-    cond_noLayersDecoder = [2, 3]
-    cond_aggregate = [False]
-    cond_noDecoders = [3]
+    cond_nHeadEncoder = [1, 4, 8]
+    cond_noLayersEncoder = [1, 2, 3, 4]
+    cond_nHeadDecoder = [1, 4, 8]
+    cond_noLayersDecoder = [1, 2, 3, 4]
+    cond_aggregate = False
+    cond_noDecoders = [4]
     
     flow_nFeatures = [10, 20, 30]
     flow_nCond = 0 # this is set up by 'cond_outFeatures + 12 - flow_nFeatures'
@@ -47,50 +48,65 @@ if __name__ == '__main__':
     flow_hidden_layersSize = [32, 64, 128, 256, 512]
     
     #learningRate = [x*0.000001 for x in range(20)]
-    learningRate = [0.000001]
-
-    cond_aggregate = ['--cond_aggregate' if x is True else '--no-cond_aggregate' for x in cond_aggregate]
-    flow_autoregressive = ['--flow_autoregressive' if x is True else '--no-flow_autoregressive' for x in flow_autoregressive ]
+    learningRate = [1e-4]
     
     i = 0
     current_path = os.path.dirname(os.path.realpath(__file__))
     
     if preTraining:
         for cond_outFeatures_value in cond_outFeatures:
-            for cond_hiddenFeatures_value in cond_hiddenFeatures:
+            for k, cond_hiddenFeatures_value in enumerate(cond_hiddenFeatures):
                 for cond_DimFeedForwardTransf_value in cond_DimFeedForwardTransf:
-                    for cond_nHeadEncoder_value in cond_nHeadEncoder:
-                        for cond_noLayersEncoder_value in cond_noLayersEncoder:
-                            for cond_nHeadDecoder_value in cond_nHeadDecoder:
-                                for cond_noLayersDecoder_value in cond_noLayersDecoder:
+                    for cond_nHeadEncoder_value in [-1]:
+                        for j, cond_noLayersEncoder_value in enumerate(cond_noLayersEncoder):
+                            for cond_nHeadDecoder_value in [-1]:
+                                for cond_noLayersDecoder_value in [-2]:
                                     for cond_noDecoders_value in cond_noDecoders:    
                                         for learningRate_value in learningRate:                                                                        
-                                            version = 'v' + str(i)
-                                            subprocess.call(["python",
-                                                            f'{current_path}/../memflow/unfolding_flow/generate_config.py',
-                                                            f"--input_dataset={input_dataset}",
-                                                            f'--name={name}',
-                                                            f'--version={version}',
-                                                            f'--description={description}',
-                                                            f'--numberJets={numberJets}',
-                                                            f'--numberLept={numberLept}',
-                                                            f'--inputFeatures={inputFeatures}',
-                                                            f'--cond_outFeatures={cond_outFeatures_value}',
-                                                            f'--cond_hiddenFeatures={cond_hiddenFeatures_value}',
-                                                            f'--cond_DimFeedForwardTransf={cond_DimFeedForwardTransf_value}',
-                                                            f'--cond_nHeadEncoder={cond_nHeadEncoder_value}',
-                                                            f'--cond_noLayersEncoder={cond_noLayersEncoder_value}',
-                                                            f'--cond_nHeadDecoder={cond_nHeadDecoder_value}',
-                                                            f'--cond_noLayersDecoder={cond_noLayersDecoder_value}',
-                                                            f'{cond_aggregate[0]}',
-                                                            f'--cond_noDecoders={cond_noDecoders_value}',
-                                                            f'--training_batchSizeTraining={training_batchSizeTraining}',
-                                                            f'--training_batchSizeValid={training_batchSizeValid}',
-                                                            f'--learningRate={learningRate_value}',
-                                                            f'--nEpochs={nEpochs}',
-                                                            f'--training_sampleDim={training_sampleDim}',
-                                                            f'--valid_sampleDim={valid_sampleDim}',
-                                                            f'--sampling_points={sampling_points}'])
+                                            version = 'v' + str(i)      
+
+                                            config = {
+                                                    "name": name,
+                                                    "version": version,
+                                                    "description": description,
+                                                    "input_dataset": input_dataset,
+                                                    "input_shape": {
+                                                        "number_jets": numberJets,
+                                                        "number_lept": numberLept,
+                                                        "input_features": inputFeatures
+                                                    },
+                                                    "training_params": {
+                                                        "lr": learningRate_value,
+                                                        "batch_size_training": training_batchSizeTraining,
+                                                        "batch_size_validation": training_batchSizeValid,
+                                                        "nepochs": nEpochs,
+                                                        "training_sample": training_sampleDim,
+                                                        "validation_sample": valid_sampleDim,
+                                                        "sampling_points": sampling_points
+                                                    },
+                                                    "conditioning_transformer":{
+                                                        "out_features": cond_outFeatures_value, # the 4 momenta
+                                                        "hidden_features": cond_hiddenFeatures_value,
+                                                        "dim_feedforward_transformer": cond_DimFeedForwardTransf_value,
+                                                        "nhead_encoder": cond_nHeadEncoder[k],
+                                                        "no_layers_encoder": cond_noLayersEncoder_value,
+                                                        "nhead_decoder": cond_nHeadDecoder[k],
+                                                        "no_layers_decoder": cond_noLayersDecoder[j],
+                                                        "aggregate": cond_aggregate,
+                                                        "no_decoders": cond_noDecoders_value
+                                                    }
+                                                }
+
+                                            conf = OmegaConf.create(config)
+                                            current_path = os.path.dirname(os.path.realpath(__file__))
+
+                                            # Save configs in MEMFlow/scripts
+                                            if(not os.path.exists(f'{current_path}/configs')):
+                                                os.makedirs(f'{current_path}/configs')
+                                                print("Create configs directory")
+                                            
+                                            with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                                fo.write(OmegaConf.to_yaml(conf))
                                                                                 
                                             i = i+1
                                                                                 
@@ -115,40 +131,58 @@ if __name__ == '__main__':
                                                                 for learningRate_value in learningRate:
                                                                             
                                                                     version = 'v' + str(i)
-                                                                            
-                                                                    subprocess.call(["python", 
-                                                                                    f'{current_path}/../memflow/unfolding_flow/generate_config.py',
-                                                                                    f'--input_dataset={input_dataset}',
-                                                                                    f'--name={name}',
-                                                                                    f'--version={version}',
-                                                                                    f'--description={description}',
-                                                                                    f'--numberJets={numberJets}',
-                                                                                    f'--numberLept={numberLept}',
-                                                                                    f'--inputFeatures={inputFeatures}',
-                                                                                    f'--cond_outFeatures={cond_outFeatures_value}',
-                                                                                    f'--cond_hiddenFeatures={cond_hiddenFeatures_value}',
-                                                                                    f'--cond_DimFeedForwardTransf={cond_DimFeedForwardTransf_value}',
-                                                                                    f'--cond_nHeadEncoder={cond_nHeadEncoder_value}',
-                                                                                    f'--cond_noLayersEncoder={cond_noLayersEncoder_value}',
-                                                                                    f'--cond_nHeadDecoder={cond_nHeadDecoder_value}',
-                                                                                    f'--cond_noLayersDecoder={cond_noLayersDecoder_value}',
-                                                                                    f'{cond_aggregate[0]}',
-                                                                                    f'--cond_noDecoders={cond_noDecoders_value}',
-                                                                                    f'--flow_nFeatures={flow_nFeatures_value}',
-                                                                                    f'--flow_nCond={cond_outFeatures_value + 12 - flow_nFeatures_value}',
-                                                                                    f'--flow_nTransforms={flow_nTransforms_value}',
-                                                                                    f'--flow_bins={flow_bins_value}',
-                                                                                    f'{flow_autoregressive_value}',
-                                                                                    f'--training_batchSizeTraining={training_batchSizeTraining}',
-                                                                                    f'--training_batchSizeValid={training_batchSizeValid}',
-                                                                                    f'--learningRate={learningRate_value}',
-                                                                                    f'--nEpochs={nEpochs}',
-                                                                                    f'--training_sampleDim={training_sampleDim}',
-                                                                                    f'--valid_sampleDim={valid_sampleDim}',
-                                                                                    f'--sampling_points={sampling_points}',
-                                                                                    f'--flow_hidden_layers={flow_hidden_layers_value}',
-                                                                                    f'--flow_hidden_layersSize={flow_hidden_layersSize_value}'])
-                                                                            
+
+                                                                    config = {
+                                                                            "name": name,
+                                                                            "version": version,
+                                                                            "description": description,
+                                                                            "input_dataset": input_dataset,
+                                                                            "input_shape": {
+                                                                                "number_jets": numberJets,
+                                                                                "number_lept": numberLept,
+                                                                                "input_features": inputFeatures
+                                                                            },
+                                                                            "training_params": {
+                                                                                "lr": learningRate_value,
+                                                                                "batch_size_training": training_batchSizeTraining,
+                                                                                "batch_size_validation": training_batchSizeValid,
+                                                                                "nepochs": nEpochs,
+                                                                                "training_sample": training_sampleDim,
+                                                                                "validation_sample": valid_sampleDim,
+                                                                                "sampling_points": sampling_points
+                                                                            },
+                                                                            "conditioning_transformer":{
+                                                                                "out_features": cond_outFeatures_value, # the 4 momenta
+                                                                                "hidden_features": cond_hiddenFeatures_value,
+                                                                                "dim_feedforward_transformer": cond_DimFeedForwardTransf_value,
+                                                                                "nhead_encoder": cond_nHeadEncoder_value,
+                                                                                "no_layers_encoder": cond_noLayersEncoder_value,
+                                                                                "nhead_decoder": cond_nHeadDecoder_value,
+                                                                                "no_layers_decoder": cond_noLayersDecoder_value,
+                                                                                "aggregate": cond_aggregate,
+                                                                                "no_decoders": cond_noDecoders_value
+                                                                            },
+                                                                            "unfolding_flow":{
+                                                                                "nfeatures": flow_nFeatures_value,
+                                                                                "ncond": cond_outFeatures_value + 12 - flow_nFeatures_value,
+                                                                                "ntransforms": flow_nTransforms_value,
+                                                                                "hidden_mlp": [flow_hidden_layersSize_value]*flow_hidden_layers_value,
+                                                                                "bins": flow_bins_value,
+                                                                                "autoregressive": flow_autoregressive_value
+                                                                            }
+                                                                        }
+
+                                                                    conf = OmegaConf.create(config)
+                                                                    current_path = os.path.dirname(os.path.realpath(__file__))
+
+                                                                    # Save configs in MEMFlow/scripts
+                                                                    if(not os.path.exists(f'{current_path}/configs')):
+                                                                        os.makedirs(f'{current_path}/configs')
+                                                                        print("Create configs directory")
+                                                                    
+                                                                    with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                                                        fo.write(OmegaConf.to_yaml(conf))       
+                                                                    
                                                                     i = i+1
                                                                             
                                                                     if i >= args.maxFiles and args.maxFiles != -1:
