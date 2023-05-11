@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 class Dataset_RecoLevel(Dataset):
     def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False,
-                 dtype=None, reco_list=[]):
+                 dtype=None, build=False, reco_list=[]):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
@@ -21,8 +21,7 @@ class Dataset_RecoLevel(Dataset):
             "recoParticles_Cartesian": ["E", "px", "py", "pz"]
         }
 
-        NUMBER_TOTAL_FILES_JETS  = 12
-        print(f"NUMBER_TOTAL_FILES_JETS = {NUMBER_TOTAL_FILES_JETS}")
+        print("\nRecoLevel")
         self.debug = debug
         self.root = root
         self.reco_list = reco_list
@@ -32,76 +31,76 @@ class Dataset_RecoLevel(Dataset):
         allObjects = self.object_types[:]
         allObjects.append('recoParticles_Cartesian')
         
-        # if an object is missing (example: jets/lepton_reco/met/boost/recoCartesian => compute boost)
-        for object_type in allObjects:
-            if not os.path.isfile(self.processed_file_names(object_type)):
-                print("File missing: compute boost")
-                self.boost = self.get_boost()
-                break
+        # if build flag set and number of files in processed jets directory is 0
+        if (build and len(os.listdir(self.root + '/processed_jets/')) == 0):
+            self.boost = self.get_boost()
 
-        for object_type in self.object_types:
-            if not os.path.isfile(self.processed_file_names(object_type)):
+            for object_type in self.object_types:
                 print("Create new file for " + object_type)
                 self.process(object_type)
-            else:
-                print(object_type + " file already exists")
 
-        if not os.path.isfile(self.processed_file_names("recoParticles_Cartesian")):
-                print("Create new file for recoParticles_Cartesian")
-                self.processCartesian()
-        else:
-                print("recoParticles_Cartesian file already exists")
-                
-        self.mask_jets, self.data_jets = torch.load(
-            self.processed_file_names("jets"), map_location=torch.device('cpu'))
-        self.mask_lepton, self.data_lepton = torch.load(
-            self.processed_file_names("lepton_reco"), map_location=torch.device('cpu'))
-        self.mask_met, self.data_met = torch.load(
-            self.processed_file_names("met"), map_location=torch.device('cpu'))
-        self.mask_boost, self.data_boost = torch.load(
-            self.processed_file_names("boost"), map_location=torch.device('cpu'))
+            print("Create new file for recoParticles_Cartesian")
+            self.processCartesian()
+
+            # Need these tensors for scaleObjects
+            self.mask_jets, self.data_jets = torch.load(self.processed_file_names("jets"))
+            self.mask_lepton, self.data_lepton = torch.load(self.processed_file_names("lepton_reco"))
+            self.mask_met, self.data_met = torch.load(self.processed_file_names("met"))
+            self.mask_boost, self.data_boost = torch.load(self.processed_file_names("boost"))
+            self.recoParticlesCartesian = torch.load(self.processed_file_names("recoParticles_Cartesian"))
+
+            print("Create new file for LogData")
+            self.scaleObjects()
+
         
-        self.recoParticlesCartesian = torch.load(
-            self.processed_file_names("recoParticles_Cartesian"), map_location=torch.device('cpu'))
+        else :       
+            self.mask_jets, self.data_jets = torch.load(self.processed_file_names("jets"))
+            self.mask_lepton, self.data_lepton = torch.load(self.processed_file_names("lepton_reco"))
+            self.mask_met, self.data_met = torch.load(self.processed_file_names("met"))
+            self.mask_boost, self.data_boost = torch.load(self.processed_file_names("boost"))
         
-        # if there are less files than number of total_load => create new file for logData
-        if len(os.listdir(self.root + '/processed_jets/')) < NUMBER_TOTAL_FILES_JETS:
-                print("Create new file for LogData")
-                self.scaleObjects()
-        else:
-                print("LogData file already exists")
+        print("Reading reco_level Files")
+
+        if 'recoParticles_Cartesian' in self.reco_list:
+            print("Load recoParticles_Cartesian")
+            self.recoParticlesCartesian = torch.load(self.processed_file_names("recoParticles_Cartesian"))
         
-        self.recoParticles = torch.load(self.processed_file_names('recoParticles'), map_location=torch.device('cpu'))
+        if 'recoParticles' in self.reco_list:
+            print("Load recoParticles")
+        self.recoParticles = torch.load(self.processed_file_names('recoParticles'))
         
         if 'scaledLogJets' in self.reco_list:
-            self.scaledLogJets, self.LogJets, self.meanJets, self.stdJets = torch.load(self.processed_file_names('scaledLogJets'),
-                                                                            map_location=torch.device('cpu'))
+            print("Load scaledLogJets")
+            self.scaledLogJets, self.LogJets, self.meanJets, self.stdJets = torch.load(
+                                                                self.processed_file_names('scaledLogJets'))
 
         if 'scaledLogLepton' in self.reco_list:
+            print("Load scaledLogLepton")
             self.scaledLogLepton, self.LogLepton, self.meanLepton, self.stdLepton = \
-                                            torch.load(self.processed_file_names('scaledLogLepton'),
-                                                        map_location=torch.device('cpu'))
+                                            torch.load(self.processed_file_names('scaledLogLepton'))
+        
         if 'scaledLogMet' in self.reco_list:
+            print("Load scaledLogMet")
             self.scaledLogMet, self.LogMet, self.meanMet, self.stdMet = \
-                                            torch.load(self.processed_file_names('scaledLogMet'),
-                                                        map_location=torch.device('cpu'))
+                                            torch.load(self.processed_file_names('scaledLogMet'))
         
         if 'scaledLogBoost' in self.reco_list:
+            print("Load scaledLogBoost")
             self.scaledLogBoost, self.LogBoost, self.meanBoost, self.stdBoost = \
-                                            torch.load(self.processed_file_names('scaledLogBoost'),
-                                                        map_location=torch.device('cpu'))
+                                            torch.load(self.processed_file_names('scaledLogBoost'))
         
         if 'scaledLogRecoParticlesCartesian' in self.reco_list:
+            print("Load scaledLogRecoParticlesCartesian")
             self.scaledLogRecoParticlesCartesian, self.LogRecoParticlesCartesian, self.meanRecoCartesian, self.stdRecoCartesian = \
-                                            torch.load(self.processed_file_names('scaledLogRecoParticlesCartesian'),
-                                                        map_location=torch.device('cpu'))
+                                            torch.load(self.processed_file_names('scaledLogRecoParticlesCartesian'))
 
         if 'scaledLogRecoParticles' in self.reco_list:
+            print("Load scaledLogRecoParticles")
             self.scaledLogRecoParticles, self.LogRecoParticles, self.meanRecoParticles, self.stdRecoParticles = \
-                                            torch.load(self.processed_file_names('scaledLogRecoParticles'),
-                                                        map_location=torch.device('cpu'))
+                                            torch.load(self.processed_file_names('scaledLogRecoParticles'))
         
         if dev==torch.device('cuda') and torch.cuda.is_available():
+            print("Reco: Move tensors to GPU memory")
             for field in self.reco_list:
                 setattr(self, field, getattr(self, field).to(dev)) # move elements from reco_list to GPU memory
             
@@ -185,7 +184,7 @@ class Dataset_RecoLevel(Dataset):
                 mask = np.ones((d_list.shape[0], d_list.shape[1]))
             
             if (object_type == "lepton_reco" or object_type == "met"):
-                fake_btag = -1*np.ones((d_list.shape[0], d_list.shape[1], 1))
+                fake_btag = np.zeros((d_list.shape[0], d_list.shape[1], 1))
                 fake_prov = np.zeros((d_list.shape[0], d_list.shape[1], 1))
                 d_list = np.concatenate((d_list, fake_btag, fake_prov), axis=2)
                 
@@ -301,6 +300,10 @@ class Dataset_RecoLevel(Dataset):
         recoParticles = torch.cat((self.data_jets, self.data_lepton, self.data_met), dim=1)
         meanRecoParticles, stdRecoParticles, scaledLogRecoParticles, LogRecoParticles = self.scaleTensor(recoParticles,
                                                                                   recoMask, isCartesian=False)
+        
+        # attach bbtag and prov to cartesian full tensor
+        scaledLogRecoParticlesCartesian = torch.cat((scaledLogRecoParticlesCartesian, recoParticles[:,:,3:]), dim=2)
+        LogRecoParticlesCartesian = torch.cat((LogRecoParticlesCartesian, recoParticles[:,:,3:]), dim=2)
         
         torch.save((recoParticles), self.processed_file_names('recoParticles'))
         
