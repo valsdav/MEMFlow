@@ -23,11 +23,14 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--config-directory', type=str, required=True, help='path to config.yaml directory')
+    parser.add_argument('--output-dir', type=str, required=True, help='Output directory')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     parser.add_argument('--preTraining', action="store_true",  help='run the preTraining script (by default: run `run_model.py`)')
     args = parser.parse_args()
     
     conf_dir = args.config_directory
+    outputDir = os.path.abspath(args.output_dir)
+
     on_GPU = args.on_GPU # by default run on CPU
     if on_GPU:
         on_GPU = '--on-GPU'
@@ -43,14 +46,14 @@ if __name__ == '__main__':
     print(scriptPath)
     # get absolute paths of all config files in conf_dir
     confFiles = absoluteFilePaths(conf_dir)
-    
-    model_results = f"{os.getcwd()}/results/logs"
-    mkdir_p(model_results)
-    
+        
     job_directory = f"{os.getcwd()}/jobs"
     
     # create job directory (where job config files are kept)
     mkdir_p(job_directory)
+
+    # create output directory
+    mkdir_p(outputDir)
         
         
     for i, conf_path in enumerate(confFiles):
@@ -68,7 +71,7 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --ntasks=10       # request 10 CPU's\n")
             fh.writelines("#SBATCH --gres=gpu:1     # request 1 GPU's on machine\n")
             fh.writelines("#SBATCH --mem=4000M      # memory (per job)\n")
-            fh.writelines("#SBATCH --time=1-00:00   # time  in format DD-HH:MM\n")    
+            fh.writelines("#SBATCH --time=2-00:00   # time  in format DD-HH:MM\n")    
             
             fh.writelines("\n\n")
             fh.writelines("# Activate environment:\n")
@@ -85,7 +88,8 @@ if __name__ == '__main__':
             fh.writelines("\n\n")
             fh.writelines("echo CUDA_VISIBLE_DEVICES : $CUDA_VISIBLE_DEVICES\n")
             fh.writelines("# python program script.py should use CUDA_VISIBLE_DEVICES variable (*NOT* hardcoded GPU's numbers)\n")
-            fh.writelines(f"/work/adpetre/miniconda3/envs/dizertatie/bin/python {scriptPath} --path-config={conf_path} {on_GPU}\n")
+            fh.writelines(f"/work/adpetre/miniconda3/envs/dizertatie/bin/python {scriptPath} --path-config={conf_path} \
+                            --output-dir={outputDir} {on_GPU}\n")
             
             fh.writelines("\n\n")
             fh.writelines("# cleaning of temporal working dir when job was completed:\n")

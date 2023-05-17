@@ -7,7 +7,8 @@ from omegaconf import OmegaConf
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dataset', type=str, required=True, help='Path to dataset file')
+    parser.add_argument('--input-dataset', type=str, required=True, help='Path to dataset file')
+    parser.add_argument('--output-dir', type=str, required=True, help='Path to output directory')
     parser.add_argument('--maxFiles', type=int, default=-1, help='Maximum number of files created')
     parser.add_argument('--preTraining', action="store_true",  help='creates config files for pretraining')
     args = parser.parse_args()
@@ -15,12 +16,12 @@ if __name__ == '__main__':
     preTraining = args.preTraining
     input_dataset = args.input_dataset
     if preTraining:
-        name = 'preTraining-MEMFlow'
+        name = 'preTraining-MEMFlow_noprov'
     else:
         name = 'MEMFlow'
     description = ''
     numberJets = 15
-    inputFeatures = 6
+    inputFeatures = 5
     numberLept = 1
     training_batchSizeTraining = 2048
     training_batchSizeValid = 2048
@@ -28,10 +29,11 @@ if __name__ == '__main__':
     training_sampleDim = 500000
     valid_sampleDim = 69993
     sampling_points = 100
+    nEpochsPatience = 20
     
     cond_outFeatures = [4]
     cond_hiddenFeatures = [16, 32, 64]
-    cond_DimFeedForwardTransf = [512, 1024, 2048]
+    cond_DimFeedForwardTransf = [1024, 2048]
     cond_nHeadEncoder = [1, 4, 8]
     cond_noLayersEncoder = [1, 2, 3, 4]
     cond_nHeadDecoder = [1, 4, 8]
@@ -48,7 +50,7 @@ if __name__ == '__main__':
     flow_hidden_layersSize = [32, 64, 128, 256, 512]
     
     #learningRate = [x*0.000001 for x in range(20)]
-    learningRate = [1e-4]
+    learningRate = [1e-3]
     
     i = 0
     current_path = os.path.dirname(os.path.realpath(__file__))
@@ -82,7 +84,8 @@ if __name__ == '__main__':
                                                         "nepochs": nEpochs,
                                                         "training_sample": training_sampleDim,
                                                         "validation_sample": valid_sampleDim,
-                                                        "sampling_points": sampling_points
+                                                        "sampling_points": sampling_points,
+                                                        "nEpochsPatience": nEpochsPatience
                                                     },
                                                     "conditioning_transformer":{
                                                         "out_features": cond_outFeatures_value, # the 4 momenta
@@ -98,14 +101,13 @@ if __name__ == '__main__':
                                                 }
 
                                             conf = OmegaConf.create(config)
-                                            current_path = os.path.dirname(os.path.realpath(__file__))
-
+                                            outputDir = os.path.abspath(args.output_dir)
                                             # Save configs in MEMFlow/scripts
-                                            if(not os.path.exists(f'{current_path}/configs')):
-                                                os.makedirs(f'{current_path}/configs')
+                                            if(not os.path.exists(f'{outputDir}')):
+                                                os.makedirs(f'{outputDir}')
                                                 print("Create configs directory")
                                             
-                                            with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                            with open(f"{outputDir}/config_{conf.name}_{conf.version}.yaml", "w") as fo:
                                                 fo.write(OmegaConf.to_yaml(conf))
                                                                                 
                                             i = i+1
@@ -149,7 +151,8 @@ if __name__ == '__main__':
                                                                                 "nepochs": nEpochs,
                                                                                 "training_sample": training_sampleDim,
                                                                                 "validation_sample": valid_sampleDim,
-                                                                                "sampling_points": sampling_points
+                                                                                "sampling_points": sampling_points,
+                                                                                "nEpochsPatience": nEpochsPatience
                                                                             },
                                                                             "conditioning_transformer":{
                                                                                 "out_features": cond_outFeatures_value, # the 4 momenta
@@ -173,15 +176,14 @@ if __name__ == '__main__':
                                                                         }
 
                                                                     conf = OmegaConf.create(config)
-                                                                    current_path = os.path.dirname(os.path.realpath(__file__))
-
+                                                                    outputDir = os.path.abspath(args.output_dir)
                                                                     # Save configs in MEMFlow/scripts
-                                                                    if(not os.path.exists(f'{current_path}/configs')):
-                                                                        os.makedirs(f'{current_path}/configs')
+                                                                    if(not os.path.exists(f'{outputDir}')):
+                                                                        os.makedirs(f'{outputDir}')
                                                                         print("Create configs directory")
                                                                     
-                                                                    with open(f"{current_path}/configs/config_{conf.name}_{conf.version}.yaml", "w") as fo:
-                                                                        fo.write(OmegaConf.to_yaml(conf))       
+                                                                    with open(f"{outputDir}/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                                                        fo.write(OmegaConf.to_yaml(conf))      
                                                                     
                                                                     i = i+1
                                                                             

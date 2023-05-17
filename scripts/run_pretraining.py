@@ -22,13 +22,15 @@ from pynvml import *
 
 torch.cuda.empty_cache()
 
-def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
+def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         
     loss_fn = torch.nn.MSELoss()
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
     
-    name_dir = f'{os.getcwd()}/results_preTraining/runs/{conf.name}_{conf.version}'
+    outputDir = os.path.abspath(outputDir)
+    name_dir = f'{outputDir}/{conf.name}_{conf.version}'
+    
     writer = SummaryWriter(name_dir)
     
     N_train = len(trainingLoader)
@@ -56,6 +58,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
             mask_boost_reco, data_boost_reco) = data
             
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
+
+            # remove prov
+            scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
 
             out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
@@ -87,8 +92,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
         valid_lossISR = 0
 
         trainingLoss_Epoch[e] = sum_loss/N_train
-        if (e > 10):
-            if (abs(trainingLoss_Epoch[e-10] - trainingLoss_Epoch[e]) < 1e-5):
+        if (e > config.training_params.nEpochsPatience):
+            if (abs(trainingLoss_Epoch[e - config.training_params.nEpochsPatience] - trainingLoss_Epoch[e]) < 1e-5):
                 print(f"Convergence of loss at epoch: {e}")
                 break
  
@@ -104,6 +109,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
                 mask_boost_reco, data_boost_reco) = data
                 
                 mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
+
+                # remove prov
+                scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
         
                 out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
@@ -114,7 +122,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
                 lossTlep =  loss_fn(target[:,2], out[2])
                 lossISR =  loss_fn(target[:,3], out[3])
 
-                loss = lossH + lossThad + lossTlep + valid_lossISR
+                loss = lossH + lossThad + lossTlep + lossISR
                 valid_loss += loss.item()
                 valid_lossH += lossH.item()
                 valid_lossTlep += lossTlep.item()
@@ -164,11 +172,13 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--path-config', type=str, required=True, help='path to config.yaml File')
+    parser.add_argument('--output-dir', type=str, required=True, help='Output directory')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     args = parser.parse_args()
     
     path_to_conf = args.path_config
     on_GPU = args.on_GPU # by default run on CPU
+    outputDir = args.output_dir
 
     # Read config file in 'conf'
     with open(path_to_conf) as f:
@@ -205,7 +215,7 @@ if __name__ == '__main__':
     
     train_loader = DataLoader(dataset=train_subset, shuffle=True, batch_size=conf.training_params.batch_size_training)
     val_loader = DataLoader(dataset=val_subset, shuffle=True, batch_size=conf.training_params.batch_size_validation)
-        
+
     # Initialize model
     model = ConditioningTransformerLayer(no_jets = conf.input_shape.number_jets,
                                     no_lept = conf.input_shape.number_lept,
@@ -250,11 +260,11 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
         else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
     else:
-        TrainingAndValidLoop(conf, model, train_loader, val_loader)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
         
     
     print("PreTraining finished succesfully!")
