@@ -32,6 +32,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     name_dir = f'{outputDir}/{conf.name}_{conf.version}'
     
     writer = SummaryWriter(name_dir)
+
+    with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
+        fo.write(OmegaConf.to_yaml(config)) 
     
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
@@ -163,9 +166,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict()
         }, modelName)
-
-    with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
-        fo.write(OmegaConf.to_yaml(config)) 
         
 
 if __name__ == '__main__':
