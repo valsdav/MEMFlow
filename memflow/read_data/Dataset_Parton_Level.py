@@ -86,8 +86,8 @@ class Dataset_PartonLevel(Dataset):
             self.phasespace_rambo_detjacobian = torch.load(
                 self.processed_file_names("phasespace_rambo_detjacobian"))
         
-        if 'Log_H_thad_tlep_ISR_cartesian' in self.parton_list:
-            print("Load Log_H_thad_tlep_ISR_cartesian")
+        if 'log_data_higgs_t_tbar_ISR_cartesian' in self.parton_list:
+            print("Load log_data_higgs_t_tbar_ISR_cartesian")
             self.log_data_higgs_t_tbar_ISR_cartesian = torch.load(
                 self.processed_file_names("Log_H_thad_tlep_ISR_cartesian"))
         
