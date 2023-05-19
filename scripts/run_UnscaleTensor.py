@@ -31,6 +31,8 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
     N = len(dataLoader)
 
     unscaledRegressedPartonsTensor = torch.zeros((total_sample, 4, 4))
+    batch_size = 512
+    unscaledRegressedPartons = torch.zeros((batch_size, 4, 4)) # 4096 = batch_size
     print(f"unscaledRegressedPartonsTensor: {unscaledRegressedPartonsTensor.shape}")
                 
     for i, data in enumerate(dataLoader):
@@ -52,14 +54,11 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
 
         out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
 
-        firstDim = out[0].shape[0]
-        unscaledRegressedPartons = torch.zeros((firstDim, 4, 4))
-
         for particle in range(len(out)):
             unscaledRegressedPartons[:, particle] = out[particle]*std_log_data_higgs_t_tbar_ISR_cartesian \
                                                 + mean_log_data_higgs_t_tbar_ISR_cartesian
 
-        unscaledRegressedPartonsTensor[i*firstDim:(i+1)*firstDim,:,:] = unscaledRegressedPartons
+        unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,:,:] = unscaledRegressedPartons
 
     
     torch.save((unscaledRegressedPartonsTensor), f'{outputDir}/unscaledRegressedPartonsTensor.pt')
@@ -115,7 +114,7 @@ if __name__ == '__main__':
                                         'mean_log_data_higgs_t_tbar_ISR_cartesian',
                                         'std_log_data_higgs_t_tbar_ISR_cartesian'])
         
-    data_loader = DataLoader(dataset=data, shuffle=True, batch_size=conf.training_params.batch_size_training)
+    data_loader = DataLoader(dataset=data, shuffle=False, batch_size=512)
 
     # Initialize model
     model = ConditioningTransformerLayer(no_jets = conf.input_shape.number_jets,
