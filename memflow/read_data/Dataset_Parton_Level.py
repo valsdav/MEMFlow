@@ -91,7 +91,7 @@ class Dataset_PartonLevel(Dataset):
             self.log_data_higgs_t_tbar_ISR_cartesian = torch.load(
                 self.processed_file_names("Log_H_thad_tlep_ISR_cartesian"))
         
-        if 'logScaled_data_higgs_t_tbar_ISR_cartesian' in self.parton_list:
+        if 'logScaled_data_higgs_t_tbar_ISR_cartesian' in self.parton_list or 'mean_log_data_higgs_t_tbar_ISR_cartesian' in self.parton_list:
             print("Load logScaled_data_higgs_t_tbar_ISR_cartesian")
             self.mean_log_data_higgs_t_tbar_ISR_cartesian, self.std_log_data_higgs_t_tbar_ISR_cartesian = torch.load(
                 self.processed_file_names("Log_mean_std_H_thad_tlep_ISR_cartesian"))
