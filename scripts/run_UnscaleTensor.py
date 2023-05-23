@@ -40,8 +40,7 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
         if (i % 100 == 0):
             print(i)
             
-        (logScaled_data_higgs_t_tbar_ISR_cartesian,
-        mean_log_data_higgs_t_tbar_ISR_cartesian,
+        (mean_log_data_higgs_t_tbar_ISR_cartesian,
         std_log_data_higgs_t_tbar_ISR_cartesian,
         scaledLogRecoParticlesCartesian, mask_lepton_reco, 
         mask_jets, mask_met, 
@@ -50,7 +49,7 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
         mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
         # remove prov
-        #scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
+        scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
 
         out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
 
@@ -107,17 +106,46 @@ if __name__ == '__main__':
         else:
             actual_devices = list(range(torch.cuda.device_count()))
         print("Actual devices: ", actual_devices)
+
+    if (device == torch.device('cuda')):
+        nvmlInit()
+        h = nvmlDeviceGetHandleByIndex(0)
+        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+        info = nvmlDeviceGetMemoryInfo(h)
+        print(f'\ntotal    : {info.total}')
+        print(f'free     : {info.free}')
+        print(f'used     : {info.used}')
+        nvmlShutdown()
+
+        print("torch.cuda.memory_allocated: %fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024))
+        print("torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024))
+        print("torch.cuda.max_memory_reserved: %fGB"%(torch.cuda.max_memory_reserved(0)/1024/1024/1024))
+        print('')
     
     # READ data
     data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
                             reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
                                         'mask_jets','mask_met',
                                         'mask_boost', 'data_boost'],
-                            parton_list=['logScaled_data_higgs_t_tbar_ISR_cartesian',
-                                        'mean_log_data_higgs_t_tbar_ISR_cartesian',
+                            parton_list=['mean_log_data_higgs_t_tbar_ISR_cartesian',
                                         'std_log_data_higgs_t_tbar_ISR_cartesian'])
     
     data_loader = DataLoader(dataset=data, shuffle=False, batch_size=256)
+
+    if (device == torch.device('cuda')):
+        nvmlInit()
+        h = nvmlDeviceGetHandleByIndex(0)
+        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+        info = nvmlDeviceGetMemoryInfo(h)
+        print(f'\ntotal    : {info.total}')
+        print(f'free     : {info.free}')
+        print(f'used     : {info.used}')
+        nvmlShutdown()
+
+        print("torch.cuda.memory_allocated: %fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024))
+        print("torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024))
+        print("torch.cuda.max_memory_reserved: %fGB"%(torch.cuda.max_memory_reserved(0)/1024/1024/1024))
+        print('')
 
     # Initialize model
     model = ConditioningTransformerLayer(no_jets = conf.input_shape.number_jets,
@@ -147,6 +175,11 @@ if __name__ == '__main__':
         print(f'free     : {info.free}')
         print(f'used     : {info.used}')
         nvmlShutdown()
+
+        print("torch.cuda.memory_allocated: %fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024))
+        print("torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024))
+        print("torch.cuda.max_memory_reserved: %fGB"%(torch.cuda.max_memory_reserved(0)/1024/1024/1024))
+        print('')
 
     # Copy model on GPU memory
     if (device == torch.device('cuda')):
