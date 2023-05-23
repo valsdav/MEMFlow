@@ -68,7 +68,7 @@ if __name__ == '__main__':
                                             version = 'v' + str(i)      
 
                                             config = {
-                                                    "name": name,
+                                                    "name": name + f'_{version}',
                                                     "version": version,
                                                     "description": description,
                                                     "input_dataset": input_dataset,
@@ -135,7 +135,7 @@ if __name__ == '__main__':
                                                                     version = 'v' + str(i)
 
                                                                     config = {
-                                                                            "name": name,
+                                                                            "name": name + f'_{version}',
                                                                             "version": version,
                                                                             "description": description,
                                                                             "input_dataset": input_dataset,

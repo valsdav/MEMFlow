@@ -160,12 +160,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
     writer.close()
 
+    print('preTraining finished, let\'s save the weights')
+
     modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
 
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict()
         }, modelName)
+
+    print('Model saved!!')
         
 
 if __name__ == '__main__':
