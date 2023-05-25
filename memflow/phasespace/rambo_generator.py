@@ -588,7 +588,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    def getPSpoint_batch(self, momenta_batch, x1, x2):
+    def getPSpoint_batch(self, momenta_batch, x1, x2, ensure_CM=True):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input.
 
@@ -598,10 +598,11 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         n = self.n_final
         P = momenta_batch.clone()  # copy the final state particles
         
-        # Check if we are in the CM
-        ref_lab = torch.sum(P, axis=1)
-        if not ((rho2_t(ref_lab) < 1e-3).any()):
-            raise Exception("Momenta batch not in the CM, failing to convert back to PS point")
+        if ensure_CM:
+            # Check if we are in the CM
+            ref_lab = torch.sum(P, axis=1)
+            if not ((rho2_t(ref_lab) < 1e-3).any()):
+                raise Exception("Momenta batch not in the CM, failing to convert back to PS point")
         
         # We start getting M and then K
         M = torch.tensor(
@@ -649,7 +650,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             deltaphi += torch.where((P[:, j - 1, 1] < 0), torch.pi, 0.0)
             phi += deltaphi
             r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
-
 
         # Get uniform from x1x2 space
         r1r2, jacinv_x1x2 = get_uniform_from_x1x2(x1, x2, self.tot_final_state_masses, self.collider_energy)
