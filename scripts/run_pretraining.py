@@ -44,7 +44,6 @@ def check_mass(particle, mean, std):
     
     print(particle_try.mass)
 
-
 def constrain_energy(higgs, thad, tlep, ISR, mean, std):
 
     unscaled_higgs = higgs*std[1:] + mean[1:]
@@ -81,6 +80,28 @@ def constrain_energy(higgs, thad, tlep, ISR, mean, std):
 
     return logE_higgs, logE_thad, logE_tlep, logE_ISR
 
+def total_mom(higgs, thad, tlep, ISR, mean, std):
+
+    unscaled_higgs = higgs*std[1:] + mean[1:]
+    unscaled_thad = thad*std[1:] + mean[1:]
+    unscaled_tlep = tlep*std[1:] + mean[1:]
+    unscaled_ISR = ISR*std[1:] + mean[1:]
+
+    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
+    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
+    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
+    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
+
+    sum_px = regressed_higgs[:,0] + regressed_thad[:,0] + regressed_tlep[:,0] + regressed_ISR[:,0]
+    sum_py = regressed_higgs[:,1] + regressed_thad[:,1] + regressed_tlep[:,1] + regressed_ISR[:,1]
+    sum_pz = regressed_higgs[:,2] + regressed_thad[:,2] + regressed_tlep[:,2] + regressed_ISR[:,2]
+
+    logsum_px = torch.log(1 + torch.abs(sum_px))
+    logsum_py = torch.log(1 + torch.abs(sum_py))
+    logsum_pz = torch.log(1 + torch.abs(sum_pz))
+
+    return logsum_px, logsum_py, logsum_pz
+
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         
     loss_fn = torch.nn.MSELoss()
@@ -108,6 +129,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
     log_mean = torch.tensor(conf.scaling_params.log_mean)
     log_std = torch.tensor(conf.scaling_params.log_std)
+
+    zero_ref = torch.zeros((config.training_params.batch_size_training))
 
     for e in range(config.training_params.nepochs):
         
@@ -148,9 +171,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             tlep = out[2]
             ISR = out[3]
 
-            sum_px = higgs[:,0] + thad[:,0] + tlep[:,0] + ISR[:,0]
-            sum_py = higgs[:,1] + thad[:,1] + tlep[:,1] + ISR[:,1]
-            sum_pz = higgs[:,2] + thad[:,2] + tlep[:,2] + ISR[:,2]
+            logsum_px, logsum_py, logsum_pz = total_mom(higgs, thad, tlep, ISR, log_mean, log_std)
 
             logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
 
@@ -162,9 +183,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             # check mass for debubgging
             # check_mass(ISR, log_mean, log_std)
             
-            losspx = loss_fn(0, sum_px)
-            losspy = loss_fn(0, sum_py)
-            losspz = loss_fn(0, sum_pz)
+            losspx = loss_fn(zero_ref, logsum_px)
+            losspy = loss_fn(zero_ref, logsum_py)
+            losspz = loss_fn(zero_ref, logsum_pz)
         
             lossH = loss_fn(target[:,0], higgs)
             lossThad =  loss_fn(target[:,1], thad)
@@ -179,7 +200,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             writer.add_scalar('loss_py', losspy.item(), ii)
             writer.add_scalar('loss_pz', losspz.item(), ii)
 
-            loss = lossH + lossThad + lossTlep + lossISR + losspx + losspy + losspz
+            loss = lossH + lossThad + lossTlep + lossISR + \
+                    0.1*torch.abs(losspx) + 0.1*torch.abs(losspy) + 0.1*torch.abs(losspz)
             
             loss.backward()
             optimizer.step()
