@@ -20,7 +20,12 @@ import argparse
 import os
 from pynvml import *
 
+from earlystop import EarlyStopper
+
 torch.cuda.empty_cache()
+
+M_HIGGS = 125.25
+M_TOP = 173.29
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         
@@ -40,10 +45,19 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     N_valid = len(validLoader)
     
     ii = 0
-    trainingLoss_Epoch = [0]*config.training_params.nepochs
+    early_stopper = EarlyStopper(patience=10, min_delta=1e-5)
+
+    modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
+
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
+
+        sum_px = 0.
+        sum_py = 0.
+        sum_pz = 0.
+
+        sum_total_p = 0.
     
         # training loop    
         print("Before training loop")
@@ -68,17 +82,38 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
             target = data[0]
+            higgs = out[0]
+            thad = out[1]
+            tlep = out[2]
+            ISR = out[3]
+
+            sum_px = higgs[:,1] + thad[:,1] + tlep[:,1] + ISR[:,1]
+            sum_py = higgs[:,2] + thad[:,2] + tlep[:,2] + ISR[:,2]
+            sum_pz = higgs[:,3] + thad[:,3] + tlep[:,3] + ISR[:,3]
+
+            higgs[:,0] = torch.sqrt(M_HIGGS**2 + higgs[:,1]**2 + higgs[:,2]**2 + higgs[:,3]**2)
+            thad[:,0] = torch.sqrt(M_TOP**2 + thad[:,1]**2 + thad[:,2]**2 + thad[:,3]**2)
+            tlep[:,0] = torch.sqrt(M_TOP**2 + tlep[:,1]**2 + tlep[:,2]**2 + tlep[:,3]**2)
+            ISR[:,0] = torch.sqrt(ISR[:,1]**2 + ISR[:,2]**2 + ISR[:,3]**2)
+            
+            losspx = loss_fn(0, sum_px)
+            losspy = loss_fn(0, sum_py)
+            losspz = loss_fn(0, sum_pz)
         
-            lossH = loss_fn(target[:,0], out[0])
-            lossThad =  loss_fn(target[:,1], out[1])
-            lossTlep =  loss_fn(target[:,2], out[2])
-            lossISR =  loss_fn(target[:,3], out[3])
+            lossH = loss_fn(target[:,0], higgs)
+            lossThad =  loss_fn(target[:,1], thad)
+            lossTlep =  loss_fn(target[:,2], tlep)
+            lossISR =  loss_fn(target[:,3], ISR)
+
             writer.add_scalar('loss_H', lossH.item(), ii)
             writer.add_scalar('loss_Thad', lossThad.item(), ii)
             writer.add_scalar('loss_Tlep', lossTlep.item(), ii)
             writer.add_scalar('loss_ISR', lossISR.item(), ii)
+            writer.add_scalar('loss_px', losspx.item(), ii)
+            writer.add_scalar('loss_py', losspy.item(), ii)
+            writer.add_scalar('loss_pz', losspz.item(), ii)
 
-            loss = lossH + lossThad + lossTlep + lossISR
+            loss = lossH + lossThad + lossTlep + lossISR + losspx + losspy + losspz
             
             loss.backward()
             optimizer.step()
@@ -93,12 +128,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         valid_lossTlep = 0
         valid_lossThad = 0
         valid_lossISR = 0
-
-        trainingLoss_Epoch[e] = sum_loss/N_train
-        if (e > config.training_params.nEpochsPatience):
-            if (abs(trainingLoss_Epoch[e - config.training_params.nEpochsPatience] - trainingLoss_Epoch[e]) < 1e-5):
-                print(f"Convergence of loss at epoch: {e}")
-                break
  
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
@@ -126,6 +155,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 lossISR =  loss_fn(target[:,3], out[3])
 
                 loss = lossH + lossThad + lossTlep + lossISR
+
                 valid_loss += loss.item()
                 valid_lossH += lossH.item()
                 valid_lossTlep += lossTlep.item()
@@ -156,20 +186,15 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
         writer.add_scalar('Loss_epoch_val_ISR', valid_lossISR/N_valid, e)
 
+        if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
+            print(f"Model converges at epoch {e} !!!")         
+            break
+
         scheduler.step() # reduce lr if the model is not improving anymore
 
     writer.close()
 
-    print('preTraining finished, let\'s save the weights')
-
-    modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
-
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict()
-        }, modelName)
-
-    print('Model saved!!')
+    print('preTraining finished!!')
         
 
 if __name__ == '__main__':
