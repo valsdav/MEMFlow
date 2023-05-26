@@ -4,6 +4,9 @@ import argparse
 import os
 from omegaconf import OmegaConf
 
+import torch
+from memflow.read_data.dataset_all import DatasetCombined
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
@@ -31,7 +34,7 @@ if __name__ == '__main__':
     sampling_points = 100
     nEpochsPatience = 20
     
-    cond_outFeatures = [4]
+    cond_outFeatures = [3]
     cond_hiddenFeatures = [16, 32, 64]
     cond_DimFeedForwardTransf = [1024, 2048]
     cond_nHeadEncoder = [1, 4, 8]
@@ -51,6 +54,13 @@ if __name__ == '__main__':
     
     #learningRate = [x*0.000001 for x in range(20)]
     learningRate = [1e-3]
+
+    if preTraining:
+        data = DatasetCombined(input_dataset, dev=torch.device('cpu'), dtype=torch.float64,
+                                reco_list=[],
+                                parton_list=['mean_log_data_higgs_t_tbar_ISR_cartesian',
+                                            'std_log_data_higgs_t_tbar_ISR_cartesian'])
+
     
     i = 0
     current_path = os.path.dirname(os.path.realpath(__file__))
@@ -76,6 +86,10 @@ if __name__ == '__main__':
                                                         "number_jets": numberJets,
                                                         "number_lept": numberLept,
                                                         "input_features": inputFeatures
+                                                    },
+                                                    "scaling_params": {
+                                                        "log_mean": data.parton_data.mean_log_data_higgs_t_tbar_ISR_cartesian.tolist(),
+                                                        "log_std": data.parton_data.std_log_data_higgs_t_tbar_ISR_cartesian.tolist()
                                                     },
                                                     "training_params": {
                                                         "lr": learningRate_value,
@@ -107,7 +121,7 @@ if __name__ == '__main__':
                                                 os.makedirs(f'{outputDir}')
                                                 print("Create configs directory")
                                             
-                                            with open(f"{outputDir}/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                            with open(f"{outputDir}/config_{conf.name}.yaml", "w") as fo:
                                                 fo.write(OmegaConf.to_yaml(conf))
                                                                                 
                                             i = i+1
@@ -182,7 +196,7 @@ if __name__ == '__main__':
                                                                         os.makedirs(f'{outputDir}')
                                                                         print("Create configs directory")
                                                                     
-                                                                    with open(f"{outputDir}/config_{conf.name}_{conf.version}.yaml", "w") as fo:
+                                                                    with open(f"{outputDir}/config_{conf.name}.yaml", "w") as fo:
                                                                         fo.write(OmegaConf.to_yaml(conf))      
                                                                     
                                                                     i = i+1

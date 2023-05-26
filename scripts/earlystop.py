@@ -5,7 +5,7 @@ class EarlyStopper:
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
-        self.min_validation_loss = np.inf
+        self.min_validation_loss = torch.inf
 
     def early_stop(self, validation_loss, model_weights, optimizer_weights, modelName):
         if validation_loss < self.min_validation_loss:

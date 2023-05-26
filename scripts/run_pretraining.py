@@ -19,6 +19,7 @@ import sys
 import argparse
 import os
 from pynvml import *
+import vector
 
 from earlystop import EarlyStopper
 
@@ -26,6 +27,59 @@ torch.cuda.empty_cache()
 
 M_HIGGS = 125.25
 M_TOP = 173.29
+
+def check_mass(particle, mean, std):
+
+    particle = particle*std + mean
+    particle = torch.sign(particle)*(torch.exp(torch.abs(particle)) - 1)
+
+    particle_try = vector.array(
+        {
+            "E": particle[:,0].detach().numpy(),
+            "px": particle[:,1].detach().numpy(),
+            "py": particle[:,2].detach().numpy(),
+            "pz": particle[:,3].detach().numpy(),
+        }
+    )
+    
+    print(particle_try.mass)
+
+
+def constrain_energy(higgs, thad, tlep, ISR, mean, std):
+
+    unscaled_higgs = higgs*std[1:] + mean[1:]
+    unscaled_thad = thad*std[1:] + mean[1:]
+    unscaled_tlep = tlep*std[1:] + mean[1:]
+    unscaled_ISR = ISR*std[1:] + mean[1:]
+
+    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
+    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
+    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
+    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
+
+    E_higgs = torch.sqrt(M_HIGGS**2 + regressed_higgs[:,0]**2 + \
+                        regressed_higgs[:,1]**2 + regressed_higgs[:,2]**2).unsqueeze(dim=1)
+            
+    E_thad = torch.sqrt(M_TOP**2 + regressed_thad[:,0]**2 + \
+                        regressed_thad[:,1]**2 + regressed_thad[:,2]**2).unsqueeze(dim=1)
+
+    E_tlep = torch.sqrt(M_TOP**2 + regressed_tlep[:,0]**2 + \
+                        regressed_tlep[:,1]**2 + regressed_tlep[:,2]**2).unsqueeze(dim=1)
+
+    E_ISR = torch.sqrt(regressed_ISR[:,0]**2 + regressed_ISR[:,1]**2 + \
+                        regressed_ISR[:,2]**2).unsqueeze(dim=1)
+
+    logE_higgs = torch.log(1 + E_higgs)
+    logE_thad = torch.log(1 + E_thad)
+    logE_tlep = torch.log(1 + E_tlep)
+    logE_ISR = torch.log(1 + E_ISR)
+
+    logE_higgs = (logE_higgs - mean[0])/std[0]
+    logE_thad = (logE_thad - mean[0])/std[0]
+    logE_tlep = (logE_tlep - mean[0])/std[0]
+    logE_ISR = (logE_ISR - mean[0])/std[0]
+
+    return logE_higgs, logE_thad, logE_tlep, logE_ISR
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         
@@ -48,6 +102,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     early_stopper = EarlyStopper(patience=10, min_delta=1e-5)
 
     modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
+
+    regressedPartons_training = torch.zeros((config.training_params.batch_size_training, 4, 4))
+    regressedPartons_valid = torch.zeros((config.training_params.batch_size_validation, 4, 4))
+
+    log_mean = torch.tensor(conf.scaling_params.log_mean)
+    log_std = torch.tensor(conf.scaling_params.log_std)
 
     for e in range(config.training_params.nepochs):
         
@@ -82,19 +142,25 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
             target = data[0]
+
             higgs = out[0]
             thad = out[1]
             tlep = out[2]
             ISR = out[3]
 
-            sum_px = higgs[:,1] + thad[:,1] + tlep[:,1] + ISR[:,1]
-            sum_py = higgs[:,2] + thad[:,2] + tlep[:,2] + ISR[:,2]
-            sum_pz = higgs[:,3] + thad[:,3] + tlep[:,3] + ISR[:,3]
+            sum_px = higgs[:,0] + thad[:,0] + tlep[:,0] + ISR[:,0]
+            sum_py = higgs[:,1] + thad[:,1] + tlep[:,1] + ISR[:,1]
+            sum_pz = higgs[:,2] + thad[:,2] + tlep[:,2] + ISR[:,2]
 
-            higgs[:,0] = torch.sqrt(M_HIGGS**2 + higgs[:,1]**2 + higgs[:,2]**2 + higgs[:,3]**2)
-            thad[:,0] = torch.sqrt(M_TOP**2 + thad[:,1]**2 + thad[:,2]**2 + thad[:,3]**2)
-            tlep[:,0] = torch.sqrt(M_TOP**2 + tlep[:,1]**2 + tlep[:,2]**2 + tlep[:,3]**2)
-            ISR[:,0] = torch.sqrt(ISR[:,1]**2 + ISR[:,2]**2 + ISR[:,3]**2)
+            logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
+
+            higgs = torch.concat((logE_higgs, higgs), dim=1)
+            thad = torch.concat((logE_thad, thad), dim=1)
+            tlep = torch.concat((logE_tlep, tlep), dim=1)
+            ISR = torch.concat((logE_ISR, ISR), dim=1)
+
+            # check mass for debubgging
+            # check_mass(ISR, log_mean, log_std)
             
             losspx = loss_fn(0, sum_px)
             losspy = loss_fn(0, sum_py)
