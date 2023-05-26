@@ -23,8 +23,6 @@ import vector
 
 from earlystop import EarlyStopper
 
-torch.cuda.empty_cache()
-
 M_HIGGS = 125.25
 M_TOP = 173.29
 
@@ -102,7 +100,7 @@ def total_mom(higgs, thad, tlep, ISR, mean, std):
 
     return logsum_px, logsum_py, logsum_pz
 
-def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
+def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, outputDir):
         
     loss_fn = torch.nn.MSELoss()
     optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
@@ -124,13 +122,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
     modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
 
-    regressedPartons_training = torch.zeros((config.training_params.batch_size_training, 4, 4))
-    regressedPartons_valid = torch.zeros((config.training_params.batch_size_validation, 4, 4))
+    log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
+    log_std = torch.tensor(conf.scaling_params.log_std, device=device)
 
-    log_mean = torch.tensor(conf.scaling_params.log_mean)
-    log_std = torch.tensor(conf.scaling_params.log_std)
-
-    zero_ref = torch.zeros((config.training_params.batch_size_training))
+    zero_ref = torch.zeros((config.training_params.batch_size_training), device=device)
 
     for e in range(config.training_params.nepochs):
         
@@ -183,9 +178,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             # check mass for debubgging
             # check_mass(ISR, log_mean, log_std)
             
-            losspx = loss_fn(zero_ref, logsum_px)
-            losspy = loss_fn(zero_ref, logsum_py)
-            losspz = loss_fn(zero_ref, logsum_pz)
+            losspx = loss_fn(zero_ref[0:logsum_px.shape[0]], logsum_px)
+            losspy = loss_fn(zero_ref[0:logsum_py.shape[0]], logsum_py)
+            losspz = loss_fn(zero_ref[0:logsum_pz.shape[0]], logsum_pz)
         
             lossH = loss_fn(target[:,0], higgs)
             lossThad =  loss_fn(target[:,1], thad)
@@ -216,6 +211,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         valid_lossTlep = 0
         valid_lossThad = 0
         valid_lossISR = 0
+        valid_losspx = 0
+        valid_losspy = 0
+        valid_losspz = 0
  
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
@@ -234,21 +232,45 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
         
                 out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
-            
+
                 target = data[0]
+            
+                higgs = out[0]
+                thad = out[1]
+                tlep = out[2]
+                ISR = out[3]
 
-                lossH = loss_fn(target[:,0], out[0])
-                lossThad =  loss_fn(target[:,1], out[1])
-                lossTlep =  loss_fn(target[:,2], out[2])
-                lossISR =  loss_fn(target[:,3], out[3])
+                logsum_px, logsum_py, logsum_pz = total_mom(higgs, thad, tlep, ISR, log_mean, log_std)
 
-                loss = lossH + lossThad + lossTlep + lossISR
+                logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
+
+                higgs = torch.concat((logE_higgs, higgs), dim=1)
+                thad = torch.concat((logE_thad, thad), dim=1)
+                tlep = torch.concat((logE_tlep, tlep), dim=1)
+                ISR = torch.concat((logE_ISR, ISR), dim=1)
+
+                losspx = loss_fn(zero_ref[0:logsum_px.shape[0]], logsum_px)
+                losspy = loss_fn(zero_ref[0:logsum_py.shape[0]], logsum_py)
+                losspz = loss_fn(zero_ref[0:logsum_pz.shape[0]], logsum_pz)
+
+                lossH = loss_fn(target[:,0], higgs)
+                lossThad =  loss_fn(target[:,1], thad)
+                lossTlep =  loss_fn(target[:,2], tlep)
+                lossISR =  loss_fn(target[:,3], ISR)
+
+                loss = lossH + lossThad + lossTlep + lossISR + \
+                    0.1*torch.abs(losspx) + 0.1*torch.abs(losspy) + 0.1*torch.abs(losspz)
 
                 valid_loss += loss.item()
                 valid_lossH += lossH.item()
                 valid_lossTlep += lossTlep.item()
                 valid_lossThad += lossThad.item()
                 valid_lossISR += lossISR.item()
+                valid_losspx += losspx.item()
+                valid_losspy += losspy.item()
+                valid_losspz += losspz.item()
+
+                particle_list = [higgs, thad, tlep, ISR]
 
                 
                 if i == 0:
@@ -256,14 +278,14 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                         for feature in range(4):
 
                             fig, ax = plt.subplots()
-                            h = ax.hist2d(out[particle][:,feature].cpu().detach().numpy().flatten(),
+                            h = ax.hist2d(particle_list[particle][:,feature].cpu().detach().numpy().flatten(),
                                           target[:,particle,feature].detach().cpu().numpy(),
                                           bins=100, range=((-3, 3),(-3, 3)))
                             fig.colorbar(h[3], ax=ax)
                             writer.add_figure(f"Validation_particleNo_{particle}_Feature_{feature}", fig, e)
 
                             fig, ax = plt.subplots()
-                            h = ax.hist((out[particle][:,feature].cpu().detach().numpy().flatten() - \
+                            h = ax.hist((particle_list[particle][:,feature].cpu().detach().numpy().flatten() - \
                                          target[:,particle,feature].detach().cpu().numpy()), bins=100)
                             writer.add_figure(f"Validation_particleNo_{particle}__Feature_{feature}_Diff", fig, e)
          
@@ -273,6 +295,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         writer.add_scalar('Loss_epoch_val_Tlep', valid_lossTlep/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
         writer.add_scalar('Loss_epoch_val_ISR', valid_lossISR/N_valid, e)
+        writer.add_scalar('Loss_epoch_val_px', valid_losspx/N_valid, e)
+        writer.add_scalar('Loss_epoch_val_py', valid_losspy/N_valid, e)
+        writer.add_scalar('Loss_epoch_val_pz', valid_losspz/N_valid, e)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         
@@ -305,6 +330,7 @@ if __name__ == '__main__':
     
     if on_GPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        torch.cuda.empty_cache()
     else:
         device = torch.device('cpu')
 
@@ -377,11 +403,11 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
+            TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir)
         else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
+            TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir)
     else:
-        TrainingAndValidLoop(conf, model, train_loader, val_loader, outputDir)
+        TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir)
         
     
     print("PreTraining finished succesfully!")
