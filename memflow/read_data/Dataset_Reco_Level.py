@@ -111,7 +111,7 @@ class Dataset_RecoLevel(Dataset):
 
     @property
     def raw_file_names(self):
-        return [self.root + '/all_jets.parquet']
+        return [self.root]
 
     def processed_file_names(self, type):
 
