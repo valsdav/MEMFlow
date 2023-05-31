@@ -20,7 +20,46 @@ import argparse
 import os
 from pynvml import *
 
-torch.cuda.empty_cache()
+M_HIGGS = 125.25
+M_TOP = 173.29
+
+def constrain_energy(higgs, thad, tlep, ISR, mean, std):
+
+    unscaled_higgs = higgs*std[1:] + mean[1:]
+    unscaled_thad = thad*std[1:] + mean[1:]
+    unscaled_tlep = tlep*std[1:] + mean[1:]
+    unscaled_ISR = ISR*std[1:] + mean[1:]
+
+    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
+    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
+    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
+    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
+
+    E_higgs = torch.sqrt(M_HIGGS**2 + regressed_higgs[:,0]**2 + \
+                        regressed_higgs[:,1]**2 + regressed_higgs[:,2]**2).unsqueeze(dim=1)
+            
+    E_thad = torch.sqrt(M_TOP**2 + regressed_thad[:,0]**2 + \
+                        regressed_thad[:,1]**2 + regressed_thad[:,2]**2).unsqueeze(dim=1)
+
+    E_tlep = torch.sqrt(M_TOP**2 + regressed_tlep[:,0]**2 + \
+                        regressed_tlep[:,1]**2 + regressed_tlep[:,2]**2).unsqueeze(dim=1)
+
+    E_ISR = torch.sqrt(regressed_ISR[:,0]**2 + regressed_ISR[:,1]**2 + \
+                        regressed_ISR[:,2]**2).unsqueeze(dim=1)
+
+    logE_higgs = torch.log(1 + E_higgs)
+    logE_thad = torch.log(1 + E_thad)
+    logE_tlep = torch.log(1 + E_tlep)
+    logE_ISR = torch.log(1 + E_ISR)
+
+    logE_higgs = (logE_higgs - mean[0])/std[0]
+    logE_thad = (logE_thad - mean[0])/std[0]
+    logE_tlep = (logE_tlep - mean[0])/std[0]
+    logE_ISR = (logE_ISR - mean[0])/std[0]
+
+    return logE_higgs, logE_thad, logE_tlep, logE_ISR
+
+
 
 def UnscaleTensor(config, model, dataLoader, outputDir):
             
@@ -31,36 +70,49 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
     N = len(dataLoader)
 
     unscaledRegressedPartonsTensor = torch.zeros((total_sample, 4, 4))
-    batch_size = 256
-    unscaledRegressedPartons = torch.zeros((batch_size, 4, 4)) # 4096 = batch_size
-    print(f"unscaledRegressedPartonsTensor: {unscaledRegressedPartonsTensor.shape}")
+    batch_size = 512
+    #unscaledRegressedPartons = torch.zeros((batch_size, 4, 4)) # 4096 = batch_size
+
+    log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
+    log_std = torch.tensor(conf.scaling_params.log_std, device=device)
                 
     for i, data in enumerate(dataLoader):
 
-        if (i % 100 == 0):
-            print(i)
-            
-        (mean_log_data_higgs_t_tbar_ISR_cartesian,
-        std_log_data_higgs_t_tbar_ISR_cartesian,
-        scaledLogRecoParticlesCartesian, mask_lepton_reco, 
-        mask_jets, mask_met, 
-        mask_boost_reco, data_boost_reco) = data
-            
-        mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
+        with torch.no_grad():
+            if (i % 100 == 0):
+                print(i)
+                
+            (scaledLogRecoParticlesCartesian, mask_lepton_reco, 
+            mask_jets, mask_met, 
+            mask_boost_reco, data_boost_reco) = data
+                
+            mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
-        # remove prov
-        scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
+            # remove prov
+            scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
 
-        out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
+            out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
 
-        for particle in range(len(out)):
-            unscaledRegressedPartons[0:out[particle].shape[0], particle] = out[particle]*std_log_data_higgs_t_tbar_ISR_cartesian[0:out[particle].shape[0],:] \
-                                                + mean_log_data_higgs_t_tbar_ISR_cartesian[0:out[particle].shape[0],:]
+            higgs = out[0]
+            thad = out[1]
+            tlep = out[2]
+            ISR = out[3]
 
-        if out[particle].shape[0] == batch_size:
-            unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,:,:] = unscaledRegressedPartons
-        else:
-            unscaledRegressedPartonsTensor[i*batch_size:,:,:] = unscaledRegressedPartons[0:out[particle].shape[0], :]
+            logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
+
+            higgs = torch.concat((logE_higgs, higgs), dim=1)
+            thad = torch.concat((logE_thad, thad), dim=1)
+            tlep = torch.concat((logE_tlep, tlep), dim=1)
+            ISR = torch.concat((logE_ISR, ISR), dim=1)
+
+            out_particles = [higgs, thad, tlep, ISR]
+
+            for particle in range(len(out_particles)):
+                if out[particle].shape[0] == batch_size:
+                    unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,:,particle] = out_particles[particle]*log_std + log_mean
+                else:
+                    unscaledRegressedPartonsTensor[i*batch_size:,:,particle] = out_particles[particle]*log_std + log_mean
+
 
     
     torch.save((unscaledRegressedPartonsTensor), f'{outputDir}/unscaledRegressedPartonsTensor.pt')
@@ -94,11 +146,11 @@ if __name__ == '__main__':
     
     if on_GPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        torch.cuda.empty_cache()
     else:
         device = torch.device('cpu')
 
     if (device == torch.device('cuda')):
-        torch.cuda.empty_cache()
         env_var = os.environ.get("CUDA_VISIBLE_DEVICES")
         if env_var:
             actual_devices = env_var.split(",")
@@ -108,14 +160,6 @@ if __name__ == '__main__':
         print("Actual devices: ", actual_devices)
 
     if (device == torch.device('cuda')):
-        nvmlInit()
-        h = nvmlDeviceGetHandleByIndex(0)
-        # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
-        info = nvmlDeviceGetMemoryInfo(h)
-        print(f'\ntotal    : {info.total}')
-        print(f'free     : {info.free}')
-        print(f'used     : {info.used}')
-        nvmlShutdown()
 
         print("torch.cuda.memory_allocated: %fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024))
         print("torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024))
@@ -127,10 +171,9 @@ if __name__ == '__main__':
                             reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
                                         'mask_jets','mask_met',
                                         'mask_boost', 'data_boost'],
-                            parton_list=['mean_log_data_higgs_t_tbar_ISR_cartesian',
-                                        'std_log_data_higgs_t_tbar_ISR_cartesian'])
+                            parton_list=[])
     
-    data_loader = DataLoader(dataset=data, shuffle=False, batch_size=256)
+    data_loader = DataLoader(dataset=data, shuffle=False, batch_size=512)
 
     if (device == torch.device('cuda')):
         nvmlInit()

@@ -34,6 +34,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
     
         # training loop    
         print("Before training loop")
+        model.train()
         for i, data in enumerate(trainingLoader):
             
             if (i % 100 == 0):
@@ -66,6 +67,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader):
 
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
+        model.eval()
         for i, data in enumerate(validLoader):
 
             logp_g, detjac, cond_X  = model(data)

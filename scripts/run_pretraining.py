@@ -139,6 +139,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
     
         # training loop    
         print("Before training loop")
+        model.train()
         for i, data in enumerate(trainingLoader):
             
             ii += 1
@@ -217,6 +218,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
  
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
+        model.eval()
         for i, data in enumerate(validLoader):
             
             with torch.no_grad():
