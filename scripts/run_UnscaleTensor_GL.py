@@ -61,7 +61,7 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
                     unscaledRegressedPartonsTensor[i*batch_size:,particle,:] = out[particle]
 
     
-    torch.save((unscaledRegressedPartonsTensor), f'{outputDir}/unscaledRegressedPartonsTensor_check.pt')
+    torch.save((unscaledRegressedPartonsTensor), f'{outputDir}/unscaledRegressedPartonsTensor.pt')
 
 
 
