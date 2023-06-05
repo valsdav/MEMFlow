@@ -14,6 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', type=str, required=True, help='Path to output directory')
     parser.add_argument('--maxFiles', type=int, default=-1, help='Maximum number of files created')
     parser.add_argument('--preTraining', action="store_true",  help='creates config files for pretraining')
+    parser.add_argument('--gluonVersion', action="store_true",  help='Use gluon version')
     args = parser.parse_args()
         
     preTraining = args.preTraining
@@ -23,14 +24,14 @@ if __name__ == '__main__':
     else:
         name = 'MEMFlow'
     description = ''
-    numberJets = 15
+    numberJets = 16
     inputFeatures = 5
     numberLept = 1
     training_batchSizeTraining = 2048
     training_batchSizeValid = 2048
     nEpochs = 1000
-    training_sampleDim = 500000
-    valid_sampleDim = 69993
+    training_sampleDim = 1131304
+    valid_sampleDim = 282826
     sampling_points = 100
     nEpochsPatience = 20
     
@@ -42,7 +43,9 @@ if __name__ == '__main__':
     cond_nHeadDecoder = [1, 4, 8]
     cond_noLayersDecoder = [1, 2, 3, 4]
     cond_aggregate = False
-    cond_noDecoders = [4]
+    cond_noDecoders = [4] # normal version
+    if args.gluonVersion:
+        cond_noDecoders = [3] # gluon version
     
     flow_nFeatures = [10, 20, 30]
     flow_nCond = 0 # this is set up by 'cond_outFeatures + 12 - flow_nFeatures'
