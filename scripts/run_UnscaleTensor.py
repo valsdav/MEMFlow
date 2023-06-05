@@ -20,9 +20,6 @@ import argparse
 import os
 from pynvml import *
 
-M_HIGGS = 125.25
-M_TOP = 173.29
-
 def constrain_energy(higgs, thad, tlep, ISR, mean, std):
 
     unscaled_higgs = higgs*std[1:] + mean[1:]
@@ -70,7 +67,7 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
     N = len(dataLoader)
 
     unscaledRegressedPartonsTensor = torch.zeros((total_sample, 4, 4))
-    batch_size = 512
+    batch_size = 2048
     #unscaledRegressedPartons = torch.zeros((batch_size, 4, 4)) # 4096 = batch_size
 
     log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
@@ -108,10 +105,10 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
             out_particles = [higgs, thad, tlep, ISR]
 
             for particle in range(len(out_particles)):
-                if out[particle].shape[0] == batch_size:
-                    unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,:,particle] = out_particles[particle]*log_std + log_mean
+                if out_particles[particle].shape[0] == batch_size:
+                    unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,particle,:] = out_particles[particle]
                 else:
-                    unscaledRegressedPartonsTensor[i*batch_size:,:,particle] = out_particles[particle]*log_std + log_mean
+                    unscaledRegressedPartonsTensor[i*batch_size:,particle,:] = out_particles[particle]
 
 
     
@@ -173,7 +170,7 @@ if __name__ == '__main__':
                                         'mask_boost', 'data_boost'],
                             parton_list=[])
     
-    data_loader = DataLoader(dataset=data, shuffle=False, batch_size=512)
+    data_loader = DataLoader(dataset=data, shuffle=False, batch_size=2048)
 
     if (device == torch.device('cuda')):
         nvmlInit()
