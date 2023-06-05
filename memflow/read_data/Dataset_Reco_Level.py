@@ -23,16 +23,20 @@ class Dataset_RecoLevel(Dataset):
 
         print("\nRecoLevel")
         self.debug = debug
+        if root[-1] == '/':
+            root = root[:-1]
         self.root = root
+        self.rootDir = self.root.rsplit('/', 1)[0]
+
         self.reco_list = reco_list
-        os.makedirs(self.root + "/processed_jets", exist_ok=True)
+        os.makedirs(self.rootDir + "/processed_jets", exist_ok=True)
         self.object_types = object_types
 
         allObjects = self.object_types[:]
         allObjects.append('recoParticles_Cartesian')
         
         # if build flag set and number of files in processed jets directory is 0
-        if (build and len(os.listdir(self.root + '/processed_jets/')) == 0):
+        if (build and len(os.listdir(self.rootDir + '/processed_jets/')) == 0):
             self.boost = self.get_boost()
 
             for object_type in self.object_types:
@@ -115,7 +119,7 @@ class Dataset_RecoLevel(Dataset):
 
     def processed_file_names(self, type):
 
-        return (self.root + '/processed_jets/' + type + '_data.pt')
+        return (self.rootDir + '/processed_jets/' + type + '_data.pt')
 
     def get_boost(self):
 

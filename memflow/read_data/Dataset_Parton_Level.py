@@ -29,14 +29,18 @@ class Dataset_PartonLevel(Dataset):
         
         print("\nPartonLevel")
         self.debug = debug
+        if root[-1] == '/':
+            root = root[:-1]
         self.root = root
+        self.rootDir = self.root.rsplit('/', 1)[0]
+
         self.parton_list = parton_list
-        os.makedirs(self.root + "/processed_partons", exist_ok=True)
+        os.makedirs(self.rootDir + "/processed_partons", exist_ok=True)
         self.object_types = object_types
         self.build = build
 
         # if build flag set and number of files in processed partons directory is 0
-        if (build and len(os.listdir(self.root + '/processed_partons/')) == 0):
+        if (build and len(os.listdir(self.rootDir + '/processed_partons/')) == 0):
 
             (self.partons_boosted, self.leptons_boosted,
             self.higgs_boosted, self.generator,
@@ -112,7 +116,7 @@ class Dataset_PartonLevel(Dataset):
         return [self.root]
 
     def processed_file_names(self, type):
-        return (self.root + '/processed_partons/' + type + '_data.pt')
+        return (self.rootDir + '/processed_partons/' + type + '_data.pt')
 
     def get_PartonsAndLeptonsAndBoost(self):
         for file in self.raw_file_names:
