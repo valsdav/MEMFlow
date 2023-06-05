@@ -13,19 +13,27 @@ if __name__ == '__main__':
     parser.add_argument('--input-dataset', type=str, required=True, help='Path to dataset file')
     parser.add_argument('--output-dir', type=str, required=True, help='Path to output directory')
     parser.add_argument('--maxFiles', type=int, default=-1, help='Maximum number of files created')
-    parser.add_argument('--preTraining', action="store_true",  help='creates config files for pretraining')
+    parser.add_argument('--preTraining-cartesian', action="store_true",  help='creates config files for pretraining')
+    parser.add_argument('--preTraining-eta', action="store_true",  help='creates config files for pretraining')
+    parser.add_argument('--noProv', action="store_true",  help='creates config files for pretraining')
     parser.add_argument('--gluonVersion', action="store_true",  help='Use gluon version')
+    
     args = parser.parse_args()
-        
-    preTraining = args.preTraining
     input_dataset = args.input_dataset
-    if preTraining:
-        name = 'preTraining-MEMFlow_noprov'
+
+    if args.preTraining_cartesian and args.noProv:
+        name = 'preTraining-MEMFlow_noprov-cartesian'
+    elif args.preTraining_cartesian:
+        name = 'preTraining-MEMFlow-cartesian'
+    elif args.preTraining_eta and args.noProv:
+        name = 'preTraining-MEMFlow_noprov-eta'
+    elif args.preTraining_eta:
+        name = 'preTraining-MEMFlow-eta'
     else:
         name = 'MEMFlow'
+
     description = ''
     numberJets = 16
-    inputFeatures = 5
     numberLept = 1
     training_batchSizeTraining = 2048
     training_batchSizeValid = 2048
@@ -34,8 +42,20 @@ if __name__ == '__main__':
     valid_sampleDim = 282826
     sampling_points = 100
     nEpochsPatience = 20
+
+    inputFeatures = 6
+    if args.preTraining_cartesian:
+        inputFeatures = 6
+    elif args.preTraining_eta:
+        inputFeatures = 5
     
-    cond_outFeatures = [3]
+    if args.noProv:
+        inputFeatures = inputFeatures - 1
+    
+    cond_outFeatures = [4]
+    if args.preTraining_eta or args.gluonVersion: # pt/eta/phi or compute Energy from px/...
+        cond_outFeatures = [3]
+
     cond_hiddenFeatures = [16, 32, 64]
     cond_DimFeedForwardTransf = [1024, 2048]
     cond_nHeadEncoder = [1, 4, 8]
@@ -44,8 +64,8 @@ if __name__ == '__main__':
     cond_noLayersDecoder = [1, 2, 3, 4]
     cond_aggregate = False
     cond_noDecoders = [4] # normal version
-    if args.gluonVersion:
-        cond_noDecoders = [3] # gluon version
+    if args.gluonVersion or args.preTraining_eta:
+        cond_noDecoders = [3] # gluon version or preTraining-eta
     
     flow_nFeatures = [10, 20, 30]
     flow_nCond = 0 # this is set up by 'cond_outFeatures + 12 - flow_nFeatures'
@@ -58,17 +78,38 @@ if __name__ == '__main__':
     #learningRate = [x*0.000001 for x in range(20)]
     learningRate = [1e-3]
 
-    if preTraining:
-        data = DatasetCombined(input_dataset, dev=torch.device('cpu'), dtype=torch.float64,
+    if args.preTraining_cartesian:
+        cartesian = True
+        print('PreTraining for cartesian input')
+        data = DatasetCombined(input_dataset, dev=torch.device('cpu'), dtype=torch.float64, build=False,
                                 reco_list=[],
                                 parton_list=['mean_log_data_higgs_t_tbar_ISR_cartesian',
                                             'std_log_data_higgs_t_tbar_ISR_cartesian'])
 
-    
+        log_mean = data.parton_data.mean_log_data_higgs_t_tbar_ISR_cartesian.tolist()
+        log_std = data.parton_data.std_log_data_higgs_t_tbar_ISR_cartesian.tolist()
+
+    elif args.preTraining_eta:
+        cartesian = False
+        print('PreTraining for pt/eta/phi input')
+        data = DatasetCombined(input_dataset, dev=torch.device('cpu'), dtype=torch.float64, build=False,
+                                reco_list=[],
+                                parton_list=['mean_log_data_higgs_t_tbar_ISR',
+                                            'std_log_data_higgs_t_tbar_ISR'])
+
+        log_mean = data.parton_data.mean_log_data_higgs_t_tbar_ISR.tolist()
+        log_std = data.parton_data.std_log_data_higgs_t_tbar_ISR.tolist()
+
+    if args.noProv:
+        noProv = True
+    else:
+        noProv = False
+        
     i = 0
     current_path = os.path.dirname(os.path.realpath(__file__))
     
-    if preTraining:
+    if args.preTraining_cartesian or args.preTraining_eta:
+
         for cond_outFeatures_value in cond_outFeatures:
             for k, cond_hiddenFeatures_value in enumerate(cond_hiddenFeatures):
                 for cond_DimFeedForwardTransf_value in cond_DimFeedForwardTransf:
@@ -85,14 +126,16 @@ if __name__ == '__main__':
                                                     "version": version,
                                                     "description": description,
                                                     "input_dataset": input_dataset,
+                                                    "cartesian": cartesian,
+                                                    "noProv": noProv,
                                                     "input_shape": {
                                                         "number_jets": numberJets,
                                                         "number_lept": numberLept,
                                                         "input_features": inputFeatures
                                                     },
                                                     "scaling_params": {
-                                                        "log_mean": data.parton_data.mean_log_data_higgs_t_tbar_ISR_cartesian.tolist(),
-                                                        "log_std": data.parton_data.std_log_data_higgs_t_tbar_ISR_cartesian.tolist()
+                                                        "log_mean": log_mean,
+                                                        "log_std": log_std
                                                     },
                                                     "training_params": {
                                                         "lr": learningRate_value,

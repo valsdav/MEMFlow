@@ -8,6 +8,83 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib as mpl
 
+M_HIGGS = 125.25
+M_TOP = 172.76
+
+def check_mass(particle, mean, std):
+
+    particle = particle*std + mean
+    particle = torch.sign(particle)*(torch.exp(torch.abs(particle)) - 1)
+
+    particle_try = vector.array(
+        {
+            "E": particle[:,0].detach().numpy(),
+            "px": particle[:,1].detach().numpy(),
+            "py": particle[:,2].detach().numpy(),
+            "pz": particle[:,3].detach().numpy(),
+        }
+    )
+    
+    print(particle_try.mass)
+
+def constrain_energy(higgs, thad, tlep, ISR, mean, std):
+
+    unscaled_higgs = higgs*std[1:] + mean[1:]
+    unscaled_thad = thad*std[1:] + mean[1:]
+    unscaled_tlep = tlep*std[1:] + mean[1:]
+    unscaled_ISR = ISR*std[1:] + mean[1:]
+
+    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
+    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
+    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
+    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
+
+    E_higgs = torch.sqrt(M_HIGGS**2 + regressed_higgs[:,0]**2 + \
+                        regressed_higgs[:,1]**2 + regressed_higgs[:,2]**2).unsqueeze(dim=1)
+            
+    E_thad = torch.sqrt(M_TOP**2 + regressed_thad[:,0]**2 + \
+                        regressed_thad[:,1]**2 + regressed_thad[:,2]**2).unsqueeze(dim=1)
+
+    E_tlep = torch.sqrt(M_TOP**2 + regressed_tlep[:,0]**2 + \
+                        regressed_tlep[:,1]**2 + regressed_tlep[:,2]**2).unsqueeze(dim=1)
+
+    E_ISR = torch.sqrt(regressed_ISR[:,0]**2 + regressed_ISR[:,1]**2 + \
+                        regressed_ISR[:,2]**2).unsqueeze(dim=1)
+
+    logE_higgs = torch.log(1 + E_higgs)
+    logE_thad = torch.log(1 + E_thad)
+    logE_tlep = torch.log(1 + E_tlep)
+    logE_ISR = torch.log(1 + E_ISR)
+
+    logE_higgs = (logE_higgs - mean[0])/std[0]
+    logE_thad = (logE_thad - mean[0])/std[0]
+    logE_tlep = (logE_tlep - mean[0])/std[0]
+    logE_ISR = (logE_ISR - mean[0])/std[0]
+
+    return logE_higgs, logE_thad, logE_tlep, logE_ISR
+
+def total_mom(higgs, thad, tlep, ISR, mean, std):
+
+    unscaled_higgs = higgs*std[1:] + mean[1:]
+    unscaled_thad = thad*std[1:] + mean[1:]
+    unscaled_tlep = tlep*std[1:] + mean[1:]
+    unscaled_ISR = ISR*std[1:] + mean[1:]
+
+    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
+    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
+    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
+    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
+
+    sum_px = regressed_higgs[:,0] + regressed_thad[:,0] + regressed_tlep[:,0] + regressed_ISR[:,0]
+    sum_py = regressed_higgs[:,1] + regressed_thad[:,1] + regressed_tlep[:,1] + regressed_ISR[:,1]
+    sum_pz = regressed_higgs[:,2] + regressed_thad[:,2] + regressed_tlep[:,2] + regressed_ISR[:,2]
+
+    logsum_px = torch.log(1 + torch.abs(sum_px))
+    logsum_py = torch.log(1 + torch.abs(sum_py))
+    logsum_pz = torch.log(1 + torch.abs(sum_pz))
+
+    return logsum_px, logsum_py, logsum_pz
+
 class SavePlots:
     
     def __init__(self, nameDir):

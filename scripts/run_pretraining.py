@@ -21,84 +21,10 @@ import os
 from pynvml import *
 import vector
 
+from utils import constrain_energy
+from utils import total_mom
+
 from earlystop import EarlyStopper
-
-M_HIGGS = 125.25
-M_TOP = 172.76
-
-def check_mass(particle, mean, std):
-
-    particle = particle*std + mean
-    particle = torch.sign(particle)*(torch.exp(torch.abs(particle)) - 1)
-
-    particle_try = vector.array(
-        {
-            "E": particle[:,0].detach().numpy(),
-            "px": particle[:,1].detach().numpy(),
-            "py": particle[:,2].detach().numpy(),
-            "pz": particle[:,3].detach().numpy(),
-        }
-    )
-    
-    print(particle_try.mass)
-
-def constrain_energy(higgs, thad, tlep, ISR, mean, std):
-
-    unscaled_higgs = higgs*std[1:] + mean[1:]
-    unscaled_thad = thad*std[1:] + mean[1:]
-    unscaled_tlep = tlep*std[1:] + mean[1:]
-    unscaled_ISR = ISR*std[1:] + mean[1:]
-
-    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
-    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
-    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
-    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
-
-    E_higgs = torch.sqrt(M_HIGGS**2 + regressed_higgs[:,0]**2 + \
-                        regressed_higgs[:,1]**2 + regressed_higgs[:,2]**2).unsqueeze(dim=1)
-            
-    E_thad = torch.sqrt(M_TOP**2 + regressed_thad[:,0]**2 + \
-                        regressed_thad[:,1]**2 + regressed_thad[:,2]**2).unsqueeze(dim=1)
-
-    E_tlep = torch.sqrt(M_TOP**2 + regressed_tlep[:,0]**2 + \
-                        regressed_tlep[:,1]**2 + regressed_tlep[:,2]**2).unsqueeze(dim=1)
-
-    E_ISR = torch.sqrt(regressed_ISR[:,0]**2 + regressed_ISR[:,1]**2 + \
-                        regressed_ISR[:,2]**2).unsqueeze(dim=1)
-
-    logE_higgs = torch.log(1 + E_higgs)
-    logE_thad = torch.log(1 + E_thad)
-    logE_tlep = torch.log(1 + E_tlep)
-    logE_ISR = torch.log(1 + E_ISR)
-
-    logE_higgs = (logE_higgs - mean[0])/std[0]
-    logE_thad = (logE_thad - mean[0])/std[0]
-    logE_tlep = (logE_tlep - mean[0])/std[0]
-    logE_ISR = (logE_ISR - mean[0])/std[0]
-
-    return logE_higgs, logE_thad, logE_tlep, logE_ISR
-
-def total_mom(higgs, thad, tlep, ISR, mean, std):
-
-    unscaled_higgs = higgs*std[1:] + mean[1:]
-    unscaled_thad = thad*std[1:] + mean[1:]
-    unscaled_tlep = tlep*std[1:] + mean[1:]
-    unscaled_ISR = ISR*std[1:] + mean[1:]
-
-    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
-    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
-    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
-    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
-
-    sum_px = regressed_higgs[:,0] + regressed_thad[:,0] + regressed_tlep[:,0] + regressed_ISR[:,0]
-    sum_py = regressed_higgs[:,1] + regressed_thad[:,1] + regressed_tlep[:,1] + regressed_ISR[:,1]
-    sum_pz = regressed_higgs[:,2] + regressed_thad[:,2] + regressed_tlep[:,2] + regressed_ISR[:,2]
-
-    logsum_px = torch.log(1 + torch.abs(sum_px))
-    logsum_py = torch.log(1 + torch.abs(sum_py))
-    logsum_pz = torch.log(1 + torch.abs(sum_pz))
-
-    return logsum_px, logsum_py, logsum_pz
 
 def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, outputDir):
         
@@ -130,12 +56,6 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
-
-        sum_px = 0.
-        sum_py = 0.
-        sum_pz = 0.
-
-        sum_total_p = 0.
     
         # training loop    
         print("Before training loop")
@@ -148,56 +68,35 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
 
             optimizer.zero_grad()
             
-            (logScaled_data_higgs_t_tbar_ISR_cartesian, 
-            scaledLogRecoParticlesCartesian, mask_lepton_reco, 
+            (logScaled_partons, 
+            logScaled_reco, mask_lepton_reco, 
             mask_jets, mask_met, 
             mask_boost_reco, data_boost_reco) = data
             
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
             # remove prov
-            scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
+            if (conf.noProv):
+                logScaled_reco = logScaled_reco[:,:,:-1]
 
-            out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
+            out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
-            target = data[0]
-
             higgs = out[0]
             thad = out[1]
             tlep = out[2]
-            ISR = out[3]
-
-            logsum_px, logsum_py, logsum_pz = total_mom(higgs, thad, tlep, ISR, log_mean, log_std)
-
-            logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
-
-            higgs = torch.concat((logE_higgs, higgs), dim=1)
-            thad = torch.concat((logE_thad, thad), dim=1)
-            tlep = torch.concat((logE_tlep, tlep), dim=1)
-            ISR = torch.concat((logE_ISR, ISR), dim=1)
 
             # check mass for debubgging
             # check_mass(ISR, log_mean, log_std)
-            
-            losspx = loss_fn(zero_ref[0:logsum_px.shape[0]], logsum_px)
-            losspy = loss_fn(zero_ref[0:logsum_py.shape[0]], logsum_py)
-            losspz = loss_fn(zero_ref[0:logsum_pz.shape[0]], logsum_pz)
         
-            lossH = loss_fn(target[:,0], higgs)
-            lossThad =  loss_fn(target[:,1], thad)
-            lossTlep =  loss_fn(target[:,2], tlep)
-            lossISR =  loss_fn(target[:,3], ISR)
+            lossH = loss_fn(logScaled_partons[:,0], higgs)
+            lossThad =  loss_fn(logScaled_partons[:,1], thad)
+            lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
 
             writer.add_scalar('loss_H', lossH.item(), ii)
             writer.add_scalar('loss_Thad', lossThad.item(), ii)
             writer.add_scalar('loss_Tlep', lossTlep.item(), ii)
-            writer.add_scalar('loss_ISR', lossISR.item(), ii)
-            writer.add_scalar('loss_px', losspx.item(), ii)
-            writer.add_scalar('loss_py', losspy.item(), ii)
-            writer.add_scalar('loss_pz', losspz.item(), ii)
 
-            loss = lossH + lossThad + lossTlep + lossISR + \
-                    0.1*torch.abs(losspx) + 0.1*torch.abs(losspy) + 0.1*torch.abs(losspz)
+            loss = lossH + lossThad + lossTlep
             
             loss.backward()
             optimizer.step()
@@ -211,10 +110,6 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
         valid_lossH = 0
         valid_lossTlep = 0
         valid_lossThad = 0
-        valid_lossISR = 0
-        valid_losspx = 0
-        valid_losspy = 0
-        valid_losspz = 0
  
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
@@ -223,72 +118,52 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
             
             with torch.no_grad():
 
-                (logScaled_data_higgs_t_tbar_ISR_cartesian, 
-                scaledLogRecoParticlesCartesian, mask_lepton_reco, 
+                (logScaled_partons, 
+                logScaled_reco, mask_lepton_reco, 
                 mask_jets, mask_met, 
                 mask_boost_reco, data_boost_reco) = data
                 
                 mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
                 # remove prov
-                scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
-        
-                out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
+                if (conf.noProv):
+                    logScaled_reco = logScaled_reco[:,:,:-1]
 
-                target = data[0]
+                out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
             
                 higgs = out[0]
                 thad = out[1]
                 tlep = out[2]
-                ISR = out[3]
 
-                logsum_px, logsum_py, logsum_pz = total_mom(higgs, thad, tlep, ISR, log_mean, log_std)
+                lossH = loss_fn(logScaled_partons[:,0], higgs)
+                lossThad =  loss_fn(logScaled_partons[:,1], thad)
+                lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
 
-                logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
-
-                higgs = torch.concat((logE_higgs, higgs), dim=1)
-                thad = torch.concat((logE_thad, thad), dim=1)
-                tlep = torch.concat((logE_tlep, tlep), dim=1)
-                ISR = torch.concat((logE_ISR, ISR), dim=1)
-
-                losspx = loss_fn(zero_ref[0:logsum_px.shape[0]], logsum_px)
-                losspy = loss_fn(zero_ref[0:logsum_py.shape[0]], logsum_py)
-                losspz = loss_fn(zero_ref[0:logsum_pz.shape[0]], logsum_pz)
-
-                lossH = loss_fn(target[:,0], higgs)
-                lossThad =  loss_fn(target[:,1], thad)
-                lossTlep =  loss_fn(target[:,2], tlep)
-                lossISR =  loss_fn(target[:,3], ISR)
-
-                loss = lossH + lossThad + lossTlep + lossISR + \
-                    0.1*torch.abs(losspx) + 0.1*torch.abs(losspy) + 0.1*torch.abs(losspz)
+                loss = lossH + lossThad + lossTlep
 
                 valid_loss += loss.item()
                 valid_lossH += lossH.item()
                 valid_lossTlep += lossTlep.item()
                 valid_lossThad += lossThad.item()
-                valid_lossISR += lossISR.item()
-                valid_losspx += losspx.item()
-                valid_losspy += losspy.item()
-                valid_losspz += losspz.item()
 
-                particle_list = [higgs, thad, tlep, ISR]
-
+                particle_list = [higgs, thad, tlep]
                 
                 if i == 0:
-                    for particle in range(4): # 4 particles: higgs/thad/tlep/gluonISR
-                        for feature in range(4):
+                    for particle in range(len(particle_list)): # 4 or 3 particles: higgs/thad/tlep/gluonISR
+                        
+                        # 4 or 3 features
+                        for feature in range(conf.conditioning_transformer.out_features):  
 
                             fig, ax = plt.subplots()
                             h = ax.hist2d(particle_list[particle][:,feature].cpu().detach().numpy().flatten(),
-                                          target[:,particle,feature].detach().cpu().numpy(),
+                                          logScaled_partons[:,particle,feature].detach().cpu().numpy(),
                                           bins=100, range=((-3, 3),(-3, 3)))
                             fig.colorbar(h[3], ax=ax)
                             writer.add_figure(f"Validation_particleNo_{particle}_Feature_{feature}", fig, e)
 
                             fig, ax = plt.subplots()
                             h = ax.hist((particle_list[particle][:,feature].cpu().detach().numpy().flatten() - \
-                                         target[:,particle,feature].detach().cpu().numpy()), bins=100)
+                                         logScaled_partons[:,particle,feature].detach().cpu().numpy()), bins=100)
                             writer.add_figure(f"Validation_particleNo_{particle}__Feature_{feature}_Diff", fig, e)
          
 
@@ -296,15 +171,12 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
         writer.add_scalar('Loss_epoch_val_H', valid_lossH/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Tlep', valid_lossTlep/N_valid, e)
         writer.add_scalar('Loss_epoch_val_Thad', valid_lossThad/N_valid, e)
-        writer.add_scalar('Loss_epoch_val_ISR', valid_lossISR/N_valid, e)
-        writer.add_scalar('Loss_epoch_val_px', valid_losspx/N_valid, e)
-        writer.add_scalar('Loss_epoch_val_py', valid_losspy/N_valid, e)
-        writer.add_scalar('Loss_epoch_val_pz', valid_losspz/N_valid, e)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         
             break
 
+        exit(0)
         scheduler.step() # reduce lr if the model is not improving anymore
 
     writer.close()
@@ -347,11 +219,19 @@ if __name__ == '__main__':
         print("Actual devices: ", actual_devices)
     
     # READ data
-    data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
-                            reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
-                                        'mask_jets','mask_met',
-                                        'mask_boost', 'data_boost'],
-                            parton_list=['logScaled_data_higgs_t_tbar_ISR_cartesian'])
+    if (conf.cartesian):
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=['logScaled_data_higgs_t_tbar_ISR_cartesian'])
+    else:
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticles', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=['logScaled_data_higgs_t_tbar_ISR'])
+
     # split data for training sample and validation sample
     train_subset, val_subset = torch.utils.data.random_split(
             data, [conf.training_params.training_sample, conf.training_params.validation_sample],
