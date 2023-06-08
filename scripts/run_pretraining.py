@@ -26,6 +26,44 @@ from utils import total_mom
 
 from earlystop import EarlyStopper
 
+PI = torch.pi
+
+def loss_fn_periodic(input, target, loss_fn, device):
+
+    deltaPhi = target - input
+    deltaPhi = torch.where(deltaPhi > PI, deltaPhi - 2*PI, deltaPhi)
+    deltaPhi = torch.where(deltaPhi <= -PI, deltaPhi + 2*PI, deltaPhi)
+    
+    return loss_fn(deltaPhi, torch.zeros(deltaPhi.shape, device=device))
+
+def compute_losses(logScaled_partons, higgs, thad, tlep, cartesian, loss_fn, device):
+    lossH = 0
+    lossThad = 0
+    lossTlep = 0
+
+    if cartesian:
+        lossH = loss_fn(logScaled_partons[:,0], higgs)
+        lossThad =  loss_fn(logScaled_partons[:,1], thad)
+        lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
+    else:
+        for feature in range(higgs.shape[1]):
+            # if feature != phi
+            if feature != 2:
+                lossH += loss_fn(logScaled_partons[:,0,feature], higgs[:,feature])
+                lossThad +=  loss_fn(logScaled_partons[:,1,feature], thad[:,feature])
+                lossTlep +=  loss_fn(logScaled_partons[:,2,feature], tlep[:,feature])
+            # case when feature is equal to phi (phi is periodic variable)
+            else:
+                lossH += loss_fn_periodic(higgs[:,feature], logScaled_partons[:,0,feature], loss_fn, device)
+                lossThad +=  loss_fn_periodic(thad[:,feature], logScaled_partons[:,1,feature], loss_fn, device)
+                lossTlep +=  loss_fn_periodic(tlep[:,feature], logScaled_partons[:,2,feature], loss_fn, device)
+
+        lossH = lossH/higgs.shape[1]
+        lossThad = lossThad/thad.shape[1]
+        lossTlep = lossTlep/tlep.shape[1]
+    
+    return lossH, lossThad, lossTlep
+
 def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, outputDir):
         
     loss_fn = torch.nn.MSELoss()
@@ -33,7 +71,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
     
     outputDir = os.path.abspath(outputDir)
-    name_dir = f'{outputDir}/{conf.name}_{conf.version}'
+    name_dir = f'{outputDir}/{config.name}_{config.version}'
     
     writer = SummaryWriter(name_dir)
 
@@ -44,14 +82,12 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
     N_valid = len(validLoader)
     
     ii = 0
-    early_stopper = EarlyStopper(patience=conf.training_params.nEpochsPatience, min_delta=0.001)
+    early_stopper = EarlyStopper(patience=config.training_params.nEpochsPatience, min_delta=0.001)
 
     modelName = f"{name_dir}/model_{config.name}_{config.version}.pt"
 
-    log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
-    log_std = torch.tensor(conf.scaling_params.log_std, device=device)
-
-    zero_ref = torch.zeros((config.training_params.batch_size_training), device=device)
+    log_mean = torch.tensor(config.scaling_params.log_mean, device=device)
+    log_std = torch.tensor(config.scaling_params.log_std, device=device)
 
     for e in range(config.training_params.nepochs):
         
@@ -63,6 +99,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
         for i, data in enumerate(trainingLoader):
             
             ii += 1
+
             if (i % 100 == 0):
                 print(i)
 
@@ -76,7 +113,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
             # remove prov
-            if (conf.noProv):
+            if (config.noProv):
                 logScaled_reco = logScaled_reco[:,:,:-1]
 
             out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
@@ -88,9 +125,8 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
             # check mass for debubgging
             # check_mass(ISR, log_mean, log_std)
         
-            lossH = loss_fn(logScaled_partons[:,0], higgs)
-            lossThad =  loss_fn(logScaled_partons[:,1], thad)
-            lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
+            lossH, lossThad, lossTlep = compute_losses(logScaled_partons, higgs, thad, tlep,
+                                                        config.cartesian, loss_fn, device)
 
             writer.add_scalar('loss_H', lossH.item(), ii)
             writer.add_scalar('loss_Thad', lossThad.item(), ii)
@@ -126,7 +162,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
                 mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
                 # remove prov
-                if (conf.noProv):
+                if (config.noProv):
                     logScaled_reco = logScaled_reco[:,:,:-1]
 
                 out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
@@ -135,9 +171,8 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
                 thad = out[1]
                 tlep = out[2]
 
-                lossH = loss_fn(logScaled_partons[:,0], higgs)
-                lossThad =  loss_fn(logScaled_partons[:,1], thad)
-                lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
+                lossH, lossThad, lossTlep = compute_losses(logScaled_partons, higgs, thad, tlep,
+                                                        config.cartesian, loss_fn, device)
 
                 loss = lossH + lossThad + lossTlep
 
@@ -152,7 +187,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
                     for particle in range(len(particle_list)): # 4 or 3 particles: higgs/thad/tlep/gluonISR
                         
                         # 4 or 3 features
-                        for feature in range(conf.conditioning_transformer.out_features):  
+                        for feature in range(config.conditioning_transformer.out_features):  
 
                             fig, ax = plt.subplots()
                             h = ax.hist2d(particle_list[particle][:,feature].cpu().detach().numpy().flatten(),
@@ -176,7 +211,6 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
             print(f"Model converges at epoch {e} !!!")         
             break
 
-        exit(0)
         scheduler.step() # reduce lr if the model is not improving anymore
 
     writer.close()

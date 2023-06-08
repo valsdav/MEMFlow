@@ -20,22 +20,21 @@ import argparse
 import os
 from pynvml import *
 
-M_HIGGS = 125.25
-M_TOP = 172.76
-
 def UnscaleTensor(config, model, dataLoader, outputDir):
             
     outputDir = os.path.abspath(outputDir)
             
-    total_sample = conf.training_params.training_sample + conf.training_params.validation_sample
+    total_sample = config.training_params.training_sample + config.training_params.validation_sample
 
     N = len(dataLoader)
 
-    unscaledRegressedPartonsTensor = torch.empty((total_sample, 4, 4))
+    unscaledRegressedPartonsTensor = torch.empty((total_sample,
+                                            config.conditioning_transformer.no_decoders,
+                                            config.conditioning_transformer.out_features))
     batch_size = 2048
 
-    log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
-    log_std = torch.tensor(conf.scaling_params.log_std, device=device)
+    log_mean = torch.tensor(config.scaling_params.log_mean, device=device)
+    log_std = torch.tensor(config.scaling_params.log_std, device=device)
                 
     for i, data in enumerate(dataLoader):
 
@@ -43,16 +42,17 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
             if (i % 100 == 0):
                 print(i)
                 
-            (scaledLogRecoParticlesCartesian, mask_lepton_reco, 
+            (logScaled_reco, mask_lepton_reco, 
             mask_jets, mask_met, 
             mask_boost_reco, data_boost_reco) = data
                 
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
             # remove prov
-            scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
+            if (config.noProv):
+                logScaled_reco = logScaled_reco[:,:,:-1]
 
-            out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
+            out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
 
             for particle in range(len(out)):
                 if out[particle].shape[0] == batch_size:
@@ -113,11 +113,18 @@ if __name__ == '__main__':
         print('')
     
     # READ data
-    data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
-                            reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
-                                        'mask_jets','mask_met',
-                                        'mask_boost', 'data_boost'],
-                            parton_list=[])
+    if (conf.cartesian):
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=[])
+    else:
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticles', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=[])
     
     data_loader = DataLoader(dataset=data, shuffle=False, batch_size=2048)
 
