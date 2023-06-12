@@ -1,60 +1,82 @@
 import torch.nn as nn
 import torch
 import numpy as np
+import utils
 from memflow.unfolding_network.conditional_transformer import ConditioningTransformerLayer
 import zuko
 from zuko.flows import TransformModule, SimpleAffineTransform
 from zuko.distributions import BoxUniform
+from memflow.unfolding_flow.utils import Compute_ParticlesTensor
 
 
 class UnfoldingFlow(nn.Module):
-    def __init__(self, no_jets, no_lept, jets_features, lepton_features, 
-                 nfeatures_flow=12, ncond_flow=34, ntransforms_flow=5, hidden_mlp_flow=[128]*4, bins_flow=16,
-                 autoregressive_flow=True, out_features_cond=32, nhead_cond=4, no_layers_cond=3, dtype=torch.float64):
+    def __init__(self, model_path, log_mean, log_std, no_jets, no_lept, input_features, cond_hiddenFeatures=64,
+                cond_dimFeedForward=512, cond_outFeatures=32, cond_nheadEncoder=4, cond_NoLayersEncoder=2,
+                cond_nheadDecoder=4, cond_NoLayersDecoder=2, cond_NoDecoders=3, cond_aggregate=False,
+                flow_nfeatures=12, flow_ncond=34, flow_ntransforms=5, flow_hiddenMLP_Features=16,
+                flow_hiddenMLP_Dim=128, flow_bins=16, flow_autoregressive=True, device=torch.device('cpu'), dtype=torch.float64):
+
         super(UnfoldingFlow, self).__init__()
+
+        self.log_mean = torch.tensor(log_mean, device=device)
+        self.log_std = torch.tensor(log_std, device=device)
         
         self.cond_transformer = ConditioningTransformerLayer(
-                                            no_jets = no_jets,
-                                            jets_features=jets_features, 
-                                            no_lept = no_lept,
-                                            lepton_features=lepton_features, 
-                                            out_features=out_features_cond,
-                                            nhead=nhead_cond,
-                                            no_layers=no_layers_cond,
-                                            dtype=dtype)      
+                                    no_jets = no_jets,
+                                    no_lept = no_lept,
+                                    input_features=input_features,
+                                    hidden_features=cond_hiddenFeatures,
+                                    dim_feedforward_transformer=cond_dimFeedForward,
+                                    out_features=cond_outFeatures,
+                                    nhead_encoder=cond_nheadEncoder,
+                                    no_layers_encoder=cond_NoLayersEncoder,
+                                    nhead_decoder=cond_nheadDecoder,
+                                    no_layers_decoder=cond_NoLayersDecoder,
+                                    no_decoders=cond_NoDecoders,
+                                    aggregate=cond_aggregate,
+                                    dtype=dtype)
+
+        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        self.cond_transformer.load_state_dict(state_dict['model_state_dict'])   
         
-        self.flow = zuko.flows.NSF(features=nfeatures_flow,
-                              context=ncond_flow, 
-                              transforms=ntransforms_flow, 
-                              bins=bins_flow, 
-                              hidden_features=hidden_mlp_flow, 
+        self.flow = zuko.flows.NSF(features=flow_nfeatures,
+                              context=flow_ncond, 
+                              transforms=flow_ntransforms, 
+                              bins=flow_bins, 
+                              hidden_features=[flow_hiddenMLP_Dim]*flow_hiddenMLP_Features, 
                               randperm=False,
                               base=BoxUniform,
-                              base_args=[torch.ones(nfeatures_flow)*(-1),torch.ones(nfeatures_flow)], 
+                              base_args=[torch.ones(flow_nfeatures)*(-1),torch.ones(flow_nfeatures)], 
                               univariate_kwargs={"bound": 1 }, # Keeping the flow in the [-1,1] box.
-                              passes= 2 if not autoregressive_flow else nfeatures_flow)
+                              passes= 2 if not flow_autoregressive else flow_nfeatures)
 
-        self.flow.transforms.insert(0, SimpleAffineTransform(0*torch.ones(nfeatures_flow),1*torch.ones(nfeatures_flow),
-                                                     -1*torch.ones(nfeatures_flow), 1*torch.ones(nfeatures_flow)))
+        self.flow.transforms.insert(0, SimpleAffineTransform(0*torch.ones(flow_nfeatures),1*torch.ones(flow_nfeatures),
+                                                     -1*torch.ones(flow_nfeatures), 1*torch.ones(flow_nfeatures)))
         
         
-    def forward(self, data):
-        
-        
-        (data_ps, data_ps_detjacinv, mask_lepton, data_lepton, mask_jets,
-        data_jets, mask_met, data_met,
-        mask_boost_reco, data_boost_reco) =  data
-            
-        cond_X = self.cond_transformer(data_jets,
-                                    data_lepton,
-                                    data_met,
-                                    data_boost_reco, 
-                                    mask_jets, 
-                                    mask_lepton, 
-                                    mask_met, 
-                                    mask_boost_reco)
+    def forward(self, data, device, noProv):
 
-        flow_result = self.flow(cond_X).log_prob(data_ps)
-        detjac = data_ps_detjacinv.log()
+        (phasespace_intermediateParticles,
+        phasespace_rambo_detjacobian,
+        logScaled_reco, mask_lepton_reco, 
+        mask_jets, mask_met, 
+        mask_boost_reco, data_boost_reco) = data
 
-        return flow_result, detjac, cond_X
+        mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
+
+        if (noProv):
+            logScaled_reco = logScaled_reco[:,:,:-1]
+        
+        with torch.no_grad():
+            cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
+
+        HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR(cond_X, self.log_mean, self.log_std, device)
+        PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, boost_regressed)
+
+        flow_result = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
+
+        # TO DO HERE (USE detjinv_regressed right??)
+        detjac = phasespace_rambo_detjacobian.log()
+
+        return flow_result, detjac, cond_X, PS_regressed
+

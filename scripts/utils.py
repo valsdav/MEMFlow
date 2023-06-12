@@ -394,7 +394,3 @@ class FindMasks:
         ISR_mask = ak.to_numpy(ISR_mask)
         
         return ISR_mask
-        
-        
-        
-        
