@@ -25,7 +25,7 @@ import argparse
 import os
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
-    optimizer = optim.Adam(list(model.parameters()) , lr=config.training_params.lr)
+    optimizer = optim.AdamW(list(model.parameters()) , lr=config.training_params.lr, weight_decay=5e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
 
     N_train = len(trainingLoader)
@@ -77,12 +77,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
             scaler.scale(loss).backward()
             #loss.backward()
-
-            # Unscales the gradients of optimizer's assigned params in-place
-            scaler.unscale_(optimizer)
-
-            # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-            torch.nn.utils.clip_grad_value_(model.parameters(), 20)
 
             #optimizer.step()
             scaler.step(optimizer)
@@ -230,8 +224,8 @@ if __name__ == '__main__':
                     flow_nfeatures=conf.unfolding_flow.nfeatures,
                     flow_ncond=conf.unfolding_flow.ncond, 
                     flow_ntransforms=conf.unfolding_flow.ntransforms,
-                    flow_hiddenMLP_Dim=conf.unfolding_flow.hidden_mlp_dim, 
-                    flow_hiddenMLP_Features=conf.unfolding_flow.hidden_mlp_features,
+                    flow_hiddenMLP_NoLayers=conf.unfolding_flow.hiddenMLP_NoLayers, 
+                    flow_hiddenMLP_LayerDim=conf.unfolding_flow.hiddenMLP_LayerDim,
                     flow_bins=conf.unfolding_flow.bins,
                     flow_autoregressive=conf.unfolding_flow.autoregressive,
                     device=device,

@@ -13,8 +13,8 @@ class UnfoldingFlow(nn.Module):
     def __init__(self, model_path, log_mean, log_std, no_jets, no_lept, input_features, cond_hiddenFeatures=64,
                 cond_dimFeedForward=512, cond_outFeatures=32, cond_nheadEncoder=4, cond_NoLayersEncoder=2,
                 cond_nheadDecoder=4, cond_NoLayersDecoder=2, cond_NoDecoders=3, cond_aggregate=False,
-                flow_nfeatures=12, flow_ncond=34, flow_ntransforms=5, flow_hiddenMLP_Features=16,
-                flow_hiddenMLP_Dim=128, flow_bins=16, flow_autoregressive=True, device=torch.device('cpu'), dtype=torch.float64):
+                flow_nfeatures=12, flow_ncond=34, flow_ntransforms=5, flow_hiddenMLP_NoLayers=16,
+                flow_hiddenMLP_LayerDim=128, flow_bins=16, flow_autoregressive=True, device=torch.device('cpu'), dtype=torch.float64):
 
         super(UnfoldingFlow, self).__init__()
 
@@ -43,7 +43,7 @@ class UnfoldingFlow(nn.Module):
                               context=flow_ncond, 
                               transforms=flow_ntransforms, 
                               bins=flow_bins, 
-                              hidden_features=[flow_hiddenMLP_Dim]*flow_hiddenMLP_Features, 
+                              hidden_features=[flow_hiddenMLP_LayerDim]*flow_hiddenMLP_NoLayers, 
                               randperm=False,
                               base=BoxUniform,
                               base_args=[torch.ones(flow_nfeatures)*(-1),torch.ones(flow_nfeatures)], 
@@ -72,17 +72,10 @@ class UnfoldingFlow(nn.Module):
             HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR(cond_X, self.log_mean, self.log_std, device)
             PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, boost_regressed)
 
+        torch.clamp(phasespace_intermediateParticles, min=1e-2, max=1-1e-2, out=phasespace_intermediateParticles)
+
         flow_result = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
 
-        inf_mask = torch.isinf(flow_result)
-        nonzeros = torch.count_nonzero(inf_mask)
-        print(f'inf={nonzeros.item()}')
-
-        inf_mask = torch.isnan(flow_result)
-        nonzeros = torch.count_nonzero(inf_mask)
-        print(f'nan={nonzeros.item()}\n')
-
-        # TO DO HERE (USE detjinv_regressed right??)
         detjac = phasespace_rambo_detjacobian.log()
 
         return flow_result, detjac, cond_X, PS_regressed
