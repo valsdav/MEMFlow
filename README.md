@@ -78,10 +78,12 @@ The argument maxFiles represent the maximum number of config files generated. By
 
 To run it:
 ```
-python scripts/run_model.py --path_config=<path-configFile> <--on-GPU>
+python scripts/run_model.py --model-dir=<path> <--on-GPU>
 ```
 
-By default, the script is running on CPU. If `--on-GPU` flag is added, the script will run on GPU.
+--model-dir: path to directory where the config file and ConditionalTransformer weights (from pretraining) are saved.
+
+If `--on-GPU` flag is added, the script will run on GPU.
 
 ## scripts/sendJobs.py
 - Send jobs:

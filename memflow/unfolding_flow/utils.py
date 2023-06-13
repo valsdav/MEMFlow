@@ -94,10 +94,9 @@ class Compute_ParticlesTensor:
         boost_regressed = higgs + thad + tlep + glISR
         boost_regressed = to_flat_tensor(boost_regressed, ["t", "x", "y", "z"], axis=1, allow_missing=False)
 
-        with torch.no_grad():
-            if (device == torch.device('cuda')):
-                data_regressed = data_regressed.cuda()
-                boost_regressed = boost_regressed.cuda()
+        if (device == torch.device('cuda')):
+            data_regressed = data_regressed.cuda()
+            boost_regressed = boost_regressed.cuda()
         
         return data_regressed, boost_regressed
 

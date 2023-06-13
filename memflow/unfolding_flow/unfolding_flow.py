@@ -69,11 +69,18 @@ class UnfoldingFlow(nn.Module):
         
         with torch.no_grad():
             cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
-
-        HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR(cond_X, self.log_mean, self.log_std, device)
-        PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, boost_regressed)
+            HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR(cond_X, self.log_mean, self.log_std, device)
+            PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, boost_regressed)
 
         flow_result = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
+
+        inf_mask = torch.isinf(flow_result)
+        nonzeros = torch.count_nonzero(inf_mask)
+        print(f'inf={nonzeros.item()}')
+
+        inf_mask = torch.isnan(flow_result)
+        nonzeros = torch.count_nonzero(inf_mask)
+        print(f'nan={nonzeros.item()}\n')
 
         # TO DO HERE (USE detjinv_regressed right??)
         detjac = phasespace_rambo_detjacobian.log()

@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import torch.multiprocessing as mp
 
+from torch.cuda.amp import GradScaler
+from torch import autocast
+
 import glob
 import sys
 import argparse
@@ -38,6 +41,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     ii = 0
     early_stopper = EarlyStopper(patience=config.training_params.nEpochsPatience, min_delta=0.001)
     
+    # Creates a GradScaler once at the beginning of training.
+    scaler = GradScaler()
+    
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
@@ -54,24 +60,37 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
             optimizer.zero_grad()
 
-            logp_g, detjac, cond_X, PS_regressed = model(data, device, config.noProv)
+            # Runs the forward pass with autocasting.
+            with autocast(device_type='cuda', dtype=torch.float16):
+                logp_g, detjac, cond_X, PS_regressed = model(data, device, config.noProv)
 
-            inf_mask = torch.isinf(logp_g)
-            nonzeros = torch.count_nonzero(inf_mask)
-            writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
+                inf_mask = torch.isinf(logp_g)
+                nonzeros = torch.count_nonzero(inf_mask)
+                writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
 
-            logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
-            detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
+                logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
+                detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
 
-            detjac_mean = -detjac.nanmean()
-            writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
+                detjac_mean = -detjac.nanmean()
+                
+                loss = -logp_g.mean()
 
-            loss = -logp_g.mean()
-            loss.backward()
+            scaler.scale(loss).backward()
+            #loss.backward()
 
-            optimizer.step() 
+            # Unscales the gradients of optimizer's assigned params in-place
+            scaler.unscale_(optimizer)
+
+            # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
+            torch.nn.utils.clip_grad_value_(model.parameters(), 20)
+
+            #optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
+
             sum_loss += loss.item()
 
+            writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
             writer.add_scalar(f"Loss_step_train_epoch_step", loss.item(), i)
 
         writer.add_scalar('Loss_epoch_train', sum_loss/N_train, e)
