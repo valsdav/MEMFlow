@@ -31,8 +31,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
     
-    name_dir = f'{outputDir}/results'
-    modelName = f"{outputDir}/model_flow_{config.version}.pt"
+    name_dir = f'{outputDir}/results4'
+    modelName = f"{outputDir}/model_flow_{config.version}4.pt"
     writer = SummaryWriter(name_dir)
 
     N_train = len(trainingLoader)
@@ -68,17 +68,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 nonzeros = torch.count_nonzero(inf_mask)
                 writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
 
-                logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
-                detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
+                #logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
+                #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
 
                 detjac_mean = -detjac.nanmean()
                 
-                loss = -logp_g.mean()
+                #loss = -logp_g.mean()
+                loss = -logp_g[torch.logical_not(inf_mask)].mean()
 
             scaler.scale(loss).backward()
-            #loss.backward()
 
-            #optimizer.step()
             scaler.step(optimizer)
             scaler.update()
 
@@ -98,8 +97,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             with torch.no_grad():
 
                 logp_g, detjac, cond_X, PS_regressed  = model(data, device, config.noProv)
-                logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
-                loss =  -logp_g.mean()
+                #logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
+                #loss =  -logp_g.mean()
+                inf_mask = torch.isinf(logp_g)
+                loss = -logp_g[torch.logical_not(inf_mask)].mean()
                 valid_loss += loss.item()
 
                 if i == 0:

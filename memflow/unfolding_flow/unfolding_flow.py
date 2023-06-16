@@ -46,8 +46,8 @@ class UnfoldingFlow(nn.Module):
                               hidden_features=[flow_hiddenMLP_LayerDim]*flow_hiddenMLP_NoLayers, 
                               randperm=False,
                               base=BoxUniform,
-                              base_args=[torch.ones(flow_nfeatures)*(-1),torch.ones(flow_nfeatures)], 
-                              univariate_kwargs={"bound": 1 }, # Keeping the flow in the [-1,1] box.
+                              base_args=[torch.ones(flow_nfeatures)*(-1.1),torch.ones(flow_nfeatures)*1.1], 
+                              univariate_kwargs={"bound": 1.1 }, # Keeping the flow in the [-1.1,1.1] box.
                               passes= 2 if not flow_autoregressive else flow_nfeatures)
 
         self.flow.transforms.insert(0, SimpleAffineTransform(0*torch.ones(flow_nfeatures),1*torch.ones(flow_nfeatures),
@@ -72,9 +72,13 @@ class UnfoldingFlow(nn.Module):
             HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR(cond_X, self.log_mean, self.log_std, device)
             PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, boost_regressed)
 
-        torch.clamp(phasespace_intermediateParticles, min=1e-2, max=1-1e-2, out=phasespace_intermediateParticles)
+        #torch.clamp(phasespace_intermediateParticles, min=1e-2, max=1-1e-2, out=phasespace_intermediateParticles)
 
         flow_result = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
+
+        #inf_mask = torch.isinf(flow_result)
+        #nonzeros = torch.count_nonzero(inf_mask)
+        #print(f'inf:{nonzeros}\n')
 
         detjac = phasespace_rambo_detjacobian.log()
 
