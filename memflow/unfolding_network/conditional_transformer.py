@@ -116,7 +116,7 @@ class ConditioningTransformerLayer(nn.Module):
                 ou_deco = deco(transformer_output, src_key_padding_mask=tmask)
                 # `computing ther average of not masked objects`
                 transformer_output_sum = torch.sum(
-                    transformer_output * torch.unsqueeze(transformer_mask, -1), dim=1)  #[B, 64]
+                    ou_deco * torch.unsqueeze(transformer_mask, -1), dim=1)  #[B, 64]
                 
                 conditional_out = transformer_output_sum / N_valid_objects
                 

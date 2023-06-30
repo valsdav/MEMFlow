@@ -94,9 +94,93 @@ class SavePlots:
             raise Exception("Directory already exists! Use another path")
         else:
             os.mkdir(self.nameDir)
-                
-                
+            
+    
     def plot_var2d(self, higgs_var1, higgs_var2, thad_var1, thad_var2, tlep_var1, tlep_var2,
+             ISR_var1, ISR_var2, name1, name2, nameFig, start1=0, stop1=1000, start2=0, stop2=1000, bins1=100, bins2=100,
+             higgs_mask=1, thad_mask=1, tlep_mask=1, ISR_mask=1, neg_Mask=False, log=False, nameunit=''):
+        
+        
+        if neg_Mask:
+            higgs_mask = np.logical_not(higgs_mask)
+            thad_mask = np.logical_not(thad_mask)
+            tlep_mask = np.logical_not(tlep_mask)
+            ISR_mask = np.logical_not(ISR_mask)
+
+        # Quick construction, no other imports needed:
+        hist2d_var_higgs = (
+          Hist.new
+          .Reg(bins=bins1, start=start1, stop=stop1, name=name1, label=name1)
+          .Reg(bins=bins2, start=start2, stop=stop2, name=name2, label=name2)
+          .Double())
+
+        hist2d_var_thad = (
+          Hist.new
+          .Reg(bins=bins1, start=start1, stop=stop1, name=name1, label=name1)
+          .Reg(bins=bins2, start=start2, stop=stop2, name=name2, label=name2)
+          .Double())
+
+        hist2d_var_tlep = (
+          Hist.new
+          .Reg(bins=bins1, start=start1, stop=stop1, name=name1, label=name1)
+          .Reg(bins=bins2, start=start2, stop=stop2, name=name2, label=name2)
+          .Double())
+
+        hist2d_var_ISR = (
+          Hist.new
+          .Reg(bins=bins1, start=start1, stop=stop1, name=name1, label=name1)
+          .Reg(bins=bins2, start=start2, stop=stop2, name=name2, label=name2)
+          .Double())
+
+        hist2d_var_higgs.fill(higgs_var1[higgs_mask],
+                            higgs_var2[higgs_mask])
+
+        hist2d_var_thad.fill(thad_var1[thad_mask],
+                            thad_var2[thad_mask])
+
+        hist2d_var_tlep.fill(tlep_var1[tlep_mask],
+                            tlep_var2[tlep_mask])
+
+        hist2d_var_ISR.fill(ISR_var1[ISR_mask],
+                            ISR_var2[ISR_mask])
+
+        colormap='viridis'
+        my_viridis = mpl.colormaps[colormap].with_extremes(under="white")
+        
+        fontsize = 20
+        labelsize=14
+        labels = ['higgs', 'thad', 'tlep', 'ISR']
+        hist2d_list = [hist2d_var_higgs, hist2d_var_thad, hist2d_var_tlep, hist2d_var_ISR]
+        
+        
+        fig, axs = plt.subplots(1, 4, figsize=(16, 6))
+
+        if log:
+            for i in range(4):
+                w, x, y = hist2d_list[i].to_numpy()
+                mesh = axs[i].pcolormesh(x, y, w.T, cmap=my_viridis, norm=mpl.colors.LogNorm(vmin=1))
+                axs[i].set_xlabel(f"{name1} {nameunit}", fontsize=fontsize)
+                axs[i].set_ylabel(f"{name2} {nameunit}", fontsize=fontsize)
+                axs[i].set_title(f"{labels[i]}", fontsize=fontsize)
+                axs[i].tick_params(axis='both', which='major', labelsize=labelsize)
+                cbar = fig.colorbar(mesh)
+                cbar.ax.tick_params(labelsize=labelsize)
+
+        else:
+            for i in range(4):
+                w, x, y = hist2d_list[i].to_numpy()
+                mesh = axs[i].pcolormesh(x, y, w.T, cmap=my_viridis, vmin=1)
+                axs[i].set_xlabel(f"{name1} {nameunit}", fontsize=fontsize)
+                axs[i].set_ylabel(f"{name2} {nameunit}", fontsize=fontsize)
+                axs[i].set_title(f"{labels[i]}", fontsize=fontsize)
+                axs[i].tick_params(axis='both', which='major', labelsize=labelsize)
+                cbar = fig.colorbar(mesh)
+                cbar.ax.tick_params(labelsize=labelsize)
+
+        plt.tight_layout()
+        plt.savefig(self.nameDir + '/' + nameFig)            
+                
+    def plot_var2d_old(self, higgs_var1, higgs_var2, thad_var1, thad_var2, tlep_var1, tlep_var2,
              ISR_var1, ISR_var2, name1, name2, nameFig, start1=0, stop1=1000, start2=0, stop2=1000, bins1=100, bins2=100,
              higgs_mask=1, thad_mask=1, tlep_mask=1, ISR_mask=1, neg_Mask=False, log=False):
         
@@ -217,7 +301,7 @@ class SavePlots:
         plt.tight_layout()
         plt.savefig(self.nameDir + '/' + nameFig)
         
-    def plot_particle(self, particleCorrect, particle, nameFig, particle_mask=1, neg_Mask=False, log=False):
+    def plot_particle(self, particleCorrect, particle, nameFig, particle_mask=1, neg_Mask=False, log=False, nameunit=''):
         
         if neg_Mask:
             particle_mask = np.logical_not(particle_mask)
@@ -257,27 +341,38 @@ class SavePlots:
 
         hist2d_pz_thad.fill(particleCorrect.pz[particle_mask],
                         particle.pz[particle_mask])
-
-        fig, axs = plt.subplots(2, 2, figsize=(16, 8))
+        
+        colormap='viridis'
+        my_viridis = mpl.colormaps[colormap].with_extremes(under="white")
+        
+        fontsize = 20
+        labelsize=14
+        hist2d_list = [hist2d_E_thad, hist2d_px_thad, hist2d_py_thad, hist2d_pz_thad]
+        labels = ['E', 'px', 'py', 'pz']
+        fig, axs = plt.subplots(2, 2, figsize=(20, 10))
 
         if log:
 
-            mplhep.hist2dplot(hist2d_E_thad, cmap="cividis", norm=mpl.colors.LogNorm(vmin=1), ax=axs[0, 0])
-
-            mplhep.hist2dplot(hist2d_px_thad, cmap="cividis", norm=mpl.colors.LogNorm(vmin=1), ax=axs[0, 1])
-
-            mplhep.hist2dplot(hist2d_py_thad, cmap="cividis", norm=mpl.colors.LogNorm(vmin=1), ax=axs[1, 0])
-
-            mplhep.hist2dplot(hist2d_pz_thad, cmap="cividis", norm=mpl.colors.LogNorm(vmin=1), ax=axs[1, 1])
+            for i in range(2):
+                for j in range(2):
+                    w, x, y = hist2d_list[i].to_numpy()
+                    mesh = axs[i, j].pcolormesh(x, y, w.T, cmap=my_viridis, norm=mpl.colors.LogNorm(vmin=1))
+                    axs[i, j].set_xlabel(f"{labels[2*i+j]}-correct {nameunit}", fontsize=fontsize)
+                    axs[i, j].set_ylabel(f"{labels[2*i+j]}-regressed {nameunit}", fontsize=fontsize)
+                    axs[i, j].tick_params(axis='both', which='major', labelsize=labelsize)
+                    cbar = fig.colorbar(mesh)
+                    cbar.ax.tick_params(labelsize=labelsize)
 
         else:
-            mplhep.hist2dplot(hist2d_E_thad, cmap="cividis", cmin=1, ax=axs[0, 0])
-
-            mplhep.hist2dplot(hist2d_px_thad, cmap="cividis", cmin=1, ax=axs[0, 1])
-
-            mplhep.hist2dplot(hist2d_py_thad, cmap="cividis", cmin=1, ax=axs[1, 0])
-
-            mplhep.hist2dplot(hist2d_pz_thad, cmap="cividis", cmin=1, ax=axs[1, 1])
+            for i in range(2):
+                for j in range(2):
+                    w, x, y = hist2d_list[i].to_numpy()
+                    mesh = axs[i, j].pcolormesh(x, y, w.T, cmap=my_viridis, vmin=1)
+                    axs[i, j].set_xlabel(f"{labels[2*i+j]}-correct {nameunit}", fontsize=fontsize)
+                    axs[i, j].set_ylabel(f"{labels[2*i+j]}-regressed {nameunit}", fontsize=fontsize)
+                    axs[i, j].tick_params(axis='both', which='major', labelsize=labelsize)
+                    cbar = fig.colorbar(mesh)
+                    cbar.ax.tick_params(labelsize=labelsize)
 
         plt.tight_layout()
         plt.savefig(self.nameDir + '/' + nameFig)
