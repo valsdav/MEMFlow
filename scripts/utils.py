@@ -444,8 +444,69 @@ class SavePlots:
 
         plt.tight_layout()
         plt.savefig(self.nameDir + '/' + nameFig)
-      
+        
+def return_Interval(regressedVar, correctVar, targetVar, lim=(0,1), ratio=False):
+    diffRegression = regressedVar - correctVar
+    if ratio==True:
+        diffRegression = ratioRegression/correctVar
+
+    indices = np.where((targetVar >= lim[0])  & (targetVar < lim[1]))[0]
+    ratioRegression_interval = diffRegression[indices]
     
+    mean_ratioRegression = np.mean(ratioRegression_interval)
+    std1sigma = (np.quantile(ratioRegression_interval, 0.84)  - np.quantile(ratioRegression_interval, 0.16))/2
+    std2sigma = (np.quantile(ratioRegression_interval, 0.975)  - np.quantile(ratioRegression_interval, 0.025))/2    
+    
+    return mean_ratioRegression, std1sigma, std2sigma, ratioRegression_interval, indices
+      
+def plot_regressionFactor(regressedVar, correctVar, targetVar, matched, limTarget, bins, intervalTargetVar=0,
+                            xerr_plot=False, ylim=[-10, 10],
+                            xname='x', yname='y', eta=False, ratio=False):
+    mean_result = []
+    std_result = []
+    std2_result = []
+    
+    regressedVar = regressedVar[matched]
+    correctVar = correctVar[matched]
+    targetVar = targetVar[matched]
+    
+    if intervalTargetVar == 0:
+        intervalTargetVar = np.linspace(start=limTarget[0], stop=limTarget[1], num=bins+1)
+    
+    target_axis = [(intervalTargetVar[i]+intervalTargetVar[i+1])/2 for i in range(0, len(intervalTargetVar)-1)]
+    
+    for i in range(len(intervalTargetVar) - 1):
+        mean, std, std2, results, indices = return_Interval(regressedVar, correctVar, targetVar,
+                                             lim=(intervalTargetVar[i],intervalTargetVar[i+1]), ratio=ratio)
+        mean_result.append(mean)
+        std_result.append(std)
+        std2_result.append(std2)
+        
+    mean_result = np.array(mean_result)
+    std_result = np.array(std_result)
+    std2_result = np.array(std2_result)
+    
+    fontsize = 22
+    labelsize = 16
+    
+    plt.plot(target_axis, mean_result, linestyle='-', marker='o', color='k')
+    if eta:
+        plt.axvline(x=-1.5, linestyle='--', color='k', alpha=0.2,)
+        plt.axvline(x=+1.5, linestyle='--', color='k', alpha=0.2,)
+        plt.axvline(x=-3, linestyle='--', color='b', alpha=0.2,)
+        plt.axvline(x=+3, linestyle='--', color='b', alpha=0.2,)
+        
+    plt.fill_between(target_axis, mean_result - std_result, mean_result + std_result,
+                     color='r', alpha=0.2, label='68% CL')
+    plt.fill_between(target_axis, mean_result - std2_result, mean_result + std2_result,
+                     color='b', alpha=0.2, label='95% CL')
+        
+    plt.ylim(ylim)
+    plt.xlabel(xname, fontsize=fontsize)
+    plt.ylabel(yname, fontsize=fontsize)
+    plt.legend()
+    plt.tick_params(axis='both', which='major', labelsize=labelsize)
+    plt.show()  
     
 class FindMasks:
 
