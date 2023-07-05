@@ -32,17 +32,19 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     N_valid = len(validLoader)
     
     name_dir = f'{outputDir}/results4'
-    modelName = f"{outputDir}/model_flow_{config.version}4.pt"
+    modelName = f"{name_dir}/model_flow_{config.version}4.pt"
     writer = SummaryWriter(name_dir)
+    with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
+        fo.write(OmegaConf.to_yaml(config))
 
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
 
     ii = 0
     early_stopper = EarlyStopper(patience=config.training_params.nEpochsPatience, min_delta=0.001)
-    
+    torch.autograd.set_detect_anomaly(True)
     # Creates a GradScaler once at the beginning of training.
-    scaler = GradScaler()
+    #scaler = GradScaler()
     
     for e in range(config.training_params.nepochs):
         
@@ -61,7 +63,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             optimizer.zero_grad()
 
             # Runs the forward pass with autocasting.
-            with autocast(device_type='cuda', dtype=torch.float16):
+            #with autocast(device_type='cuda', dtype=torch.float16):
+            if True:
                 logp_g, detjac, cond_X, PS_regressed = model(data, device, config.noProv)
 
                 inf_mask = torch.isinf(logp_g)
@@ -76,10 +79,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 #loss = -logp_g.mean()
                 loss = -logp_g[torch.logical_not(inf_mask)].mean()
 
-            scaler.scale(loss).backward()
+            #scaler.scale(loss).backward()
+            loss.backward()
+            optimizer.step()
 
-            scaler.step(optimizer)
-            scaler.update()
+            #scaler.step(optimizer)
+            #scaler.update()
 
             sum_loss += loss.item()
 
@@ -149,6 +154,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model-dir', type=str, required=True, help='path to config.yaml File')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
+    parser.add_argument('--path-config', type=str, help='by default use the file config from the pretraining directory')
     args = parser.parse_args()
     
     path_to_dir = args.model_dir
@@ -157,6 +163,9 @@ if __name__ == '__main__':
 
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
     path_to_model = glob.glob(f"{path_to_dir}/model*.pt")[0]
+
+    if (args.path_config is not None):
+        path_to_conf = args.path_config
 
     print(path_to_conf)
     # Read config file in 'conf'
