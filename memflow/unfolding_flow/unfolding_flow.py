@@ -6,7 +6,11 @@ from memflow.unfolding_network.conditional_transformer import ConditioningTransf
 import zuko
 from zuko.flows import TransformModule, SimpleAffineTransform
 from zuko.distributions import BoxUniform
+from zuko.distributions import DiagNormal
 from memflow.unfolding_flow.utils import Compute_ParticlesTensor
+
+from memflow.unfolding_flow.mmd_loss import MMDLoss
+from memflow.unfolding_flow.mmd_loss import RBF
 
 
 class UnfoldingFlow(nn.Module):
@@ -14,7 +18,9 @@ class UnfoldingFlow(nn.Module):
                 cond_dimFeedForward=512, cond_outFeatures=32, cond_nheadEncoder=4, cond_NoLayersEncoder=2,
                 cond_nheadDecoder=4, cond_NoLayersDecoder=2, cond_NoDecoders=3, cond_aggregate=False,
                 flow_nfeatures=12, flow_ncond=34, flow_ntransforms=5, flow_hiddenMLP_NoLayers=16,
-                flow_hiddenMLP_LayerDim=128, flow_bins=16, flow_autoregressive=True, device=torch.device('cpu'), dtype=torch.float64):
+                flow_hiddenMLP_LayerDim=128, flow_bins=16, flow_autoregressive=True, 
+                flow_base=BoxUniform, flow_base_first_arg=-1, flow_base_second_arg=1, flow_bound=1.,
+                device=torch.device('cpu'), dtype=torch.float64):
 
         super(UnfoldingFlow, self).__init__()
 
@@ -45,16 +51,19 @@ class UnfoldingFlow(nn.Module):
                               bins=flow_bins, 
                               hidden_features=[flow_hiddenMLP_LayerDim]*flow_hiddenMLP_NoLayers, 
                               randperm=False,
-                              base=BoxUniform,
-                              base_args=[torch.ones(flow_nfeatures)*(-1.1),torch.ones(flow_nfeatures)*1.1], 
-                              univariate_kwargs={"bound": 1.1 }, # Keeping the flow in the [-1.1,1.1] box.
+                              base=eval(flow_base),
+                              base_args=[torch.ones(flow_nfeatures)*flow_base_first_arg, torch.ones(flow_nfeatures)*flow_base_second_arg], 
+                              univariate_kwargs={"bound": flow_bound }, # Keeping the flow in the [-1,1] box.
                               passes= 2 if not flow_autoregressive else flow_nfeatures)
 
         self.flow.transforms.insert(0, SimpleAffineTransform(0*torch.ones(flow_nfeatures),1*torch.ones(flow_nfeatures),
                                                      -1*torch.ones(flow_nfeatures), 1*torch.ones(flow_nfeatures)))
+
+        kernel = RBF(device=device)
+        self.mmdLoss = MMDLoss(kernel=kernel)
         
         
-    def forward(self, data, device, noProv):
+    def forward(self, data, device, noProv, sampling_Forward=False, eps=0.0, order=[0,1,2,3]):
 
         (phasespace_intermediateParticles,
         phasespace_rambo_detjacobian,
@@ -68,12 +77,18 @@ class UnfoldingFlow(nn.Module):
             logScaled_reco = logScaled_reco[:,:,:-1]
         
         cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
-        HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR_numpy(cond_X, self.log_mean, self.log_std, device)
-
+        HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR_numpy(cond_X, self.log_mean,
+                                                                                    self.log_std, device, eps, order)
         PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, data_boost_reco)
-        flow_result = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
-
+        
+        if sampling_Forward:
+            #kl_loss = nn.KLDivLoss(reduction="none", log_target=True)
+            #flow_loss =  F.kl_div(flow_sample, phasespace_intermediateParticles, log_target=True)
+            flow_sample = self.flow(PS_regressed).sample()
+            flow_loss = self.mmdLoss(PS_regressed, phasespace_intermediateParticles)
+        else:
+            flow_loss = self.flow(PS_regressed).log_prob(phasespace_intermediateParticles)
+        
         detjac = phasespace_rambo_detjacobian.log()
-
-        return flow_result, detjac, cond_X, PS_regressed
+        return flow_loss, detjac, cond_X, PS_regressed
 

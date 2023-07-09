@@ -31,8 +31,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
     
-    name_dir = f'{outputDir}/results4'
-    modelName = f"{name_dir}/model_flow_{config.version}4.pt"
+    name_dir = f'{outputDir}/results_{config.unfolding_flow.base}_FirstArg:{config.unfolding_flow.base_first_arg}\
+                            _Autoreg:{config.unfolding_flow.autoregressive}_SamplingTr:{config.training_params.sampling_Forward}'
+    modelName = f"{name_dir}/model_flow.pt"
     writer = SummaryWriter(name_dir)
     with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
         fo.write(OmegaConf.to_yaml(config))
@@ -44,7 +45,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     early_stopper = EarlyStopper(patience=config.training_params.nEpochsPatience, min_delta=0.001)
     torch.autograd.set_detect_anomaly(True)
     # Creates a GradScaler once at the beginning of training.
-    #scaler = GradScaler()
+    scaler = GradScaler()
+
+    sampling_Forward = config.training_params.sampling_Forward
+    print(f'SAMPLINF FORWARD = {sampling_Forward}')
     
     for e in range(config.training_params.nepochs):
         
@@ -65,26 +69,26 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             # Runs the forward pass with autocasting.
             #with autocast(device_type='cuda', dtype=torch.float16):
             if True:
-                logp_g, detjac, cond_X, PS_regressed = model(data, device, config.noProv)
+                flow_loss, detjac, cond_X, PS_regressed = model(data, device, config.noProv, 
+                                                        sampling_Forward=sampling_Forward, eps=config.training_params.eps,
+                                                        order=config.training_params.order)
 
-                inf_mask = torch.isinf(logp_g)
+                inf_mask = torch.isinf(flow_loss)
                 nonzeros = torch.count_nonzero(inf_mask)
                 writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
-
                 #logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
                 #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
 
                 detjac_mean = -detjac.nanmean()
                 
                 #loss = -logp_g.mean()
-                loss = -logp_g[torch.logical_not(inf_mask)].mean()
+                loss = -flow_loss[torch.logical_not(inf_mask)].mean()
 
             #scaler.scale(loss).backward()
-            loss.backward()
-            optimizer.step()
-
             #scaler.step(optimizer)
             #scaler.update()
+            loss.backward()
+            optimizer.step()
 
             sum_loss += loss.item()
 
@@ -101,11 +105,17 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
             with torch.no_grad():
 
-                logp_g, detjac, cond_X, PS_regressed  = model(data, device, config.noProv)
-                #logp_g = torch.nan_to_num(logp_g, posinf=20, neginf=-20)
-                #loss =  -logp_g.mean()
-                inf_mask = torch.isinf(logp_g)
-                loss = -logp_g[torch.logical_not(inf_mask)].mean()
+                flow_loss, detjac, cond_X, PS_regressed = model(data, device, config.noProv, 
+                                                        sampling_Forward=sampling_Forward, eps=config.training_params.eps,
+                                                        order=config.training_params.order)
+
+                #logp_g = torch.nan_to_num(flow_loss, posinf=20, neginf=-20)
+                #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
+
+                detjac_mean = -detjac.nanmean()
+                #loss = -logp_g.mean()
+                
+                loss = -flow_loss[torch.logical_not(inf_mask)].mean()
                 valid_loss += loss.item()
 
                 if i == 0:
@@ -153,12 +163,13 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--model-dir', type=str, required=True, help='path to config.yaml File')
+    parser.add_argument('--output-dir', type=str, required=True, help='path to output directory')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     parser.add_argument('--path-config', type=str, help='by default use the file config from the pretraining directory')
     args = parser.parse_args()
     
     path_to_dir = args.model_dir
-    output_dir = f'{args.model_dir}/UnfoldingFlowResult'
+    output_dir = f'{args.model_dir}/{args.output_dir}'
     on_GPU = args.on_GPU # by default run on CPU
 
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
@@ -238,6 +249,10 @@ if __name__ == '__main__':
                     flow_hiddenMLP_LayerDim=conf.unfolding_flow.hiddenMLP_LayerDim,
                     flow_bins=conf.unfolding_flow.bins,
                     flow_autoregressive=conf.unfolding_flow.autoregressive,
+                    flow_base=conf.unfolding_flow.base,
+                    flow_base_first_arg=conf.unfolding_flow.base_first_arg,
+                    flow_base_second_arg=conf.unfolding_flow.base_second_arg,
+                    flow_bound=conf.unfolding_flow.bound,
                     device=device,
                     dtype=torch.float64)
     

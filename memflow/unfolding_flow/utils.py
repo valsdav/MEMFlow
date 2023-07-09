@@ -6,7 +6,7 @@ from memflow.phasespace.phasespace import PhaseSpace
 import memflow.phasespace.utils as utils
 
 M_HIGGS = 125.25
-M_TOP = 172.76
+M_TOP = 172.5
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -121,7 +121,7 @@ class Compute_ParticlesTensor:
 
         return particle_cartesian
 
-    def get_HttISR_numpy(cond_X, log_mean, log_std, device):
+    def get_HttISR_numpy(cond_X, log_mean, log_std, device, eps=0.0, order=[0,1,2,3]):
 
         higgs = cond_X[0].unsqueeze(dim=1)
         thad = cond_X[1].unsqueeze(dim=1)
@@ -143,10 +143,17 @@ class Compute_ParticlesTensor:
         gluon_px = -(higgs_cartesian[:,0,1] + thad_cartesian[:,0,1] + tlep_cartesian[:,0,1]).unsqueeze(dim=1)
         gluon_py = -(higgs_cartesian[:,0,2] + thad_cartesian[:,0,2] + tlep_cartesian[:,0,2]).unsqueeze(dim=1)
         gluon_pz = -(higgs_cartesian[:,0,3] + thad_cartesian[:,0,3] + tlep_cartesian[:,0,3]).unsqueeze(dim=1)
-        E_gluon = torch.sqrt(gluon_px**2 + gluon_py**2 + gluon_pz**2)
+        E_gluon = torch.sqrt(gluon_px**2 + gluon_py**2 + gluon_pz**2) + eps # add epsilon to have positive masses of the gluon
         gluon_cartesian = torch.cat((E_gluon, gluon_px, gluon_py, gluon_pz), dim=1).unsqueeze(dim=1)
 
-        data_regressed = torch.cat((higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian), dim=1)
+        listParticles = [higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian]
+        #data_regressed = torch.cat((higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian), dim=1)
+        for i in range(4):
+            if i == 0:
+                data_regressed = listParticles[order[i]]
+            else:
+                data_regressed = torch.cat((data_regressed, listParticles[order[i]]), dim=1)
+
         boost_regressed = gluon_cartesian + higgs_cartesian + thad_cartesian + tlep_cartesian
         boost_regressed = boost_regressed.squeeze(dim=1)
 
@@ -159,7 +166,6 @@ class Compute_ParticlesTensor:
     def get_PS(data_HttISR, boost_reco):
 
         E_CM = 13000
-        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21], dev="cpu")
 
         boost_reco = boost_reco.squeeze(dim=1)
         x1 = (boost_reco[:, 0] + boost_reco[:, 3]) / E_CM
@@ -188,8 +194,11 @@ class Compute_ParticlesTensor:
         # intermediate mass
         for i in range(n, 0, -1):
             j = i - 1
-            eps = 0.0000001
-            M[:, j] = torch.sqrt(utils.square_t(torch.sum(P[:, j:n], axis=1)) + eps)
+            square_t_P = utils.square_t(torch.sum(P[:, j:n], axis=1))
+            M[:, j] = torch.sqrt(square_t_P)
+
+            # new version
+            #M[:, j] = torch.nan_to_num(M[:, j], nan=0.0)
 
             # Remove the final masses to convert back to K
             K_t[:, j] = M[:,j] - torch.sum(masses_t[j:])
