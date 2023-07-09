@@ -79,11 +79,12 @@ class UnfoldingFlow(nn.Module):
         cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
         HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR_numpy(cond_X, self.log_mean,
                                                                                     self.log_std, device, eps, order)
+
+        # be careful at the order of phasespace_target and PS_regressed
+        # order by default: H/thad/tlep/ISR
         PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, data_boost_reco)
         
         if sampling_Forward:
-            #kl_loss = nn.KLDivLoss(reduction="none", log_target=True)
-            #flow_loss =  F.kl_div(flow_sample, phasespace_intermediateParticles, log_target=True)
             flow_sample = self.flow(PS_regressed).sample()
             flow_loss = self.mmdLoss(PS_regressed, phasespace_intermediateParticles)
         else:

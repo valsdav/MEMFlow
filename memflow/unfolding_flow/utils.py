@@ -148,6 +148,9 @@ class Compute_ParticlesTensor:
 
         listParticles = [higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian]
         #data_regressed = torch.cat((higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian), dim=1)
+
+        # order: by default higgs/thad/tlep/glISR
+        # but for glISR negative masses in Rambo ==> can switch the order of the data_regressed
         for i in range(4):
             if i == 0:
                 data_regressed = listParticles[order[i]]
