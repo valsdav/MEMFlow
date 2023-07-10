@@ -171,8 +171,15 @@ class Compute_ParticlesTensor:
         E_CM = 13000
 
         boost_reco = boost_reco.squeeze(dim=1)
+        # check order of components of boost_reco
         x1 = (boost_reco[:, 0] + boost_reco[:, 3]) / E_CM
         x2 = (boost_reco[:, 0] - boost_reco[:, 3]) / E_CM
+
+        mask1 = x1 < 0
+        mask2 = x2 < 0
+        if (mask1.any() or mask2.any()):
+            print("ERROR: x1 or x2 lower than 0")
+            exit(0)
 
         n = 4
         nDimPhaseSpace = 8
