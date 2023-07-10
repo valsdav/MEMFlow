@@ -10,14 +10,15 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False,
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost", "boost_objBoosted"], dev=None, debug=False,
                  dtype=None, build=False, reco_list=[]):
 
         self.fields = {
             "jets": ["pt", "eta", "phi", "btag", "prov"],
             "lepton_reco": ["pt", "eta", "phi"],
             "met": ["pt", "eta", "phi"],
-            "boost": ["x", "y", "z", "t"],
+            "boost": ["E", "px", "py", "pz"],
+            "boost_objBoosted": ["E", "px", "py", "pz"],
             "recoParticles_Cartesian": ["E", "px", "py", "pz"]
         }
 
@@ -37,7 +38,7 @@ class Dataset_RecoLevel(Dataset):
         
         # if build flag set and number of files in processed jets directory is 0
         if (build and len(os.listdir(self.rootDir + '/processed_jets/')) == 0):
-            self.boost = self.get_boost()
+            (self.boost, self.boost_objBoosted) = self.get_boost()
 
             for object_type in self.object_types:
                 print("Create new file for " + object_type)
@@ -62,6 +63,7 @@ class Dataset_RecoLevel(Dataset):
             self.mask_lepton, self.data_lepton = torch.load(self.processed_file_names("lepton_reco"))
             self.mask_met, self.data_met = torch.load(self.processed_file_names("met"))
             self.mask_boost, self.data_boost = torch.load(self.processed_file_names("boost"))
+            self.mask_boost_objBoosted, self.data_boost_objBoosted = torch.load(self.processed_file_names("boost_objBoosted"))
         
         print("Reading reco_level Files")
 
@@ -138,7 +140,14 @@ class Dataset_RecoLevel(Dataset):
             boost_jets = utils.get_vector_sum(jets)
             boost = boost_jets + leptons + met
 
-        return boost
+            jets_boosted = self.boost_CM(jets, boost)
+            leptons_boosted = self.boost_CM(leptons, boost)
+            met_boosted = self.boost_CM(met, boost)
+
+            jets_sum = utils.get_vector_sum(jets_boosted)
+            boost_objBoosted = jets_sum + leptons_boosted + met_boosted
+
+        return boost, boost_objBoosted
 
     def boost_CM(self, objects_array, boost):
         objects_CM = objects_array.boost_p4(boost.neg3D)
@@ -169,6 +178,9 @@ class Dataset_RecoLevel(Dataset):
             if (object_type == "boost"):
                 objects = self.boost
 
+            elif (object_type == "boost_objBoosted"):
+                objects = self.boost_objBoosted
+
             else:
                 objects = ak.with_name(df[object_type], name="Momentum4D")
                 objects = self.boost_CM(objects, self.boost)
@@ -183,7 +195,7 @@ class Dataset_RecoLevel(Dataset):
                 d_list = np.transpose(d_list, (0, 2, 1))
                 mask = self.get_mask_pt(d_list)
 
-            if (object_type == "lepton_reco" or object_type == "met" or object_type == "boost"):
+            if (object_type == "lepton_reco" or object_type == "met" or object_type == "boost" or object_type == "boost_objBoosted"):
                 d_list = np.expand_dims(d_list, axis=1)
                 mask = np.ones((d_list.shape[0], d_list.shape[1]))
             
