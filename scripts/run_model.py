@@ -31,8 +31,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
     
-    name_dir = f'{outputDir}/results_{config.unfolding_flow.base}_FirstArg:{config.unfolding_flow.base_first_arg}\
-                            _Autoreg:{config.unfolding_flow.autoregressive}_SamplingTr:{config.training_params.sampling_Forward}'
+    name_dir = f'{outputDir}/results_{config.unfolding_flow.base}_FirstArg:{config.unfolding_flow.base_first_arg}_Autoreg:{config.unfolding_flow.autoregressive}_SamplingTr:{config.training_params.sampling_Forward}'
     modelName = f"{name_dir}/model_flow.pt"
     writer = SummaryWriter(name_dir)
     with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
@@ -67,8 +66,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             optimizer.zero_grad()
 
             # Runs the forward pass with autocasting.
-            #with autocast(device_type='cuda', dtype=torch.float16):
-            if True:
+            with autocast(device_type='cuda', dtype=torch.float16):
+            #if True:
                 flow_loss, detjac, cond_X, PS_regressed = model(data, device, config.noProv, 
                                                         sampling_Forward=sampling_Forward, eps=config.training_params.eps,
                                                         order=config.training_params.order)
@@ -84,11 +83,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 #loss = -logp_g.mean()
                 loss = -flow_loss[torch.logical_not(inf_mask)].mean()
 
-            #scaler.scale(loss).backward()
-            #scaler.step(optimizer)
-            #scaler.update()
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            #loss.backward()
+            #optimizer.step()
 
             sum_loss += loss.item()
 
@@ -111,7 +110,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
                 #logp_g = torch.nan_to_num(flow_loss, posinf=20, neginf=-20)
                 #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
-
+                inf_mask = torch.isinf(flow_loss)
                 detjac_mean = -detjac.nanmean()
                 #loss = -logp_g.mean()
                 
@@ -126,23 +125,24 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                     mask_jets, mask_met, 
                     mask_boost_reco, data_boost_reco) = data
 
-                    ps_new = model.flow(PS_regressed).sample((config.training_params.sampling_points,))
+                    ps_new = model.flow(PS_regressed).sample()
 
                     data_ps_cpu = phasespace_intermediateParticles.detach().cpu()
                     ps_new_cpu = ps_new.detach().cpu()
 
                     for x in range(data_ps_cpu.size(1)):
                         fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1).flatten().numpy(),
-                                    ps_new_cpu[:,:,x].flatten().numpy(),
-                                    bins=50, range=((0, 1),(0, 1)))
+                        h = ax.hist2d(data_ps_cpu[:,x].numpy(), ps_new_cpu[:,x].numpy(), bins=50, range=((-1.5, 1.5),(-1.5, 1.5)))
+                        fig.colorbar(h[3], ax=ax)
+                        writer.add_figure(f"CheckElemOutside_Plot_{x}", fig, e)
+
+                        fig, ax = plt.subplots()
+                        h = ax.hist2d(data_ps_cpu[:,x].numpy(), ps_new_cpu[:,x].numpy(), bins=50, range=((-0.1, 1.1),(-0.1, 1.1)))
                         fig.colorbar(h[3], ax=ax)
                         writer.add_figure(f"Validation_ramboentry_Plot_{x}", fig, e)
 
                         fig, ax = plt.subplots()
-                        h = ax.hist(
-                            (data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1) - ps_new_cpu[:,:,x]).flatten().numpy(),
-                            bins=100)
+                        h = ax.hist(data_ps_cpu[:,x].numpy() - ps_new_cpu[:,x].numpy(), bins=100)
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
@@ -217,6 +217,7 @@ if __name__ == '__main__':
                                             'mask_boost', 'data_boost'],
                                 parton_list=['phasespace_intermediateParticles',
                                             'phasespace_rambo_detjacobian'])
+
     
     # split data for training sample and validation sample
     train_subset, val_subset = torch.utils.data.random_split(
