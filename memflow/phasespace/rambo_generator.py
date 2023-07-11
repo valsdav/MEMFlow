@@ -627,28 +627,30 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         for i in range(n, 1, -1):
             j = i - 1  # index for 0-based tensors
             # in the direct algo the u are squared.
-            u = (K_t[:, j] / K_t[:, j - 1]) ** 2
+
+            u = (K_t[:, j]/K_t[:, j-1]) ** 2
 
             r[:, j - 1] = (n + 1 - i) * (torch.pow(u, (n - i))) - (n - i) * (
                 torch.pow(u, (n + 1 - i))
-            )            
+            )
 
             Q[:, j - 1] = Q[:, j] + P[:, j - 1]
-            
-            P[:, j - 1] = boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
 
+            P[:, j - 1] = boost_t(P[:, j - 1], -1*boostVector_t(Q[:, j - 1]))
+
+            P_copy = P.clone().to(P.device)
             r[:, n - 5 + 2 * i - 1] = (
-                (P[:, j - 1, 3] / torch.sqrt(rho2_t(P[:, j - 1]))) + 1
+                (P_copy[:, j - 1, 3] / torch.sqrt(rho2_t(P_copy[:, j - 1]))) + 1
             ) / 2
             # phi= tan^-1(Py/Px)
-            phi = torch.atan(P[:, j - 1, 2] / P[:, j - 1, 1])
+            phi = torch.atan(P_copy[:, j - 1, 2] / P_copy[:, j - 1, 1])
             # Fixing phi depending on X and y sign
             # 4th quandrant  (px > 0, py < 0)
             deltaphi = torch.where(
-                (P[:, j - 1, 2] < 0) & (P[:, j - 1, 1] > 0), 2 * torch.pi, 0.0
+                (P_copy[:, j - 1, 2] < 0) & (P_copy[:, j - 1, 1] > 0), 2 * torch.pi, 0.0
             )
             # 2th and 3th quadratant  (px < 0, py whatever)
-            deltaphi += torch.where((P[:, j - 1, 1] < 0), torch.pi, 0.0)
+            deltaphi += torch.where((P_copy[:, j - 1, 1] < 0), torch.pi, 0.0)
             phi += deltaphi
             r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
 

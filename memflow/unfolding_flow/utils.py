@@ -230,19 +230,19 @@ class Compute_ParticlesTensor:
 
             P[:, j - 1] = utils.boost_t(P[:, j - 1], -1*utils.boostVector_t(Q[:, j - 1]))
 
-
+            P_copy = P.clone().to(P.device)
             r[:, n - 5 + 2 * i - 1] = (
-                (P[:, j - 1, 3] / torch.sqrt(utils.rho2_t(P[:, j - 1]))) + 1
+                (P_copy[:, j - 1, 3] / torch.sqrt(utils.rho2_t(P_copy[:, j - 1]))) + 1
             ) / 2
             # phi= tan^-1(Py/Px)
-            phi = torch.atan(P[:, j - 1, 2] / P[:, j - 1, 1])
+            phi = torch.atan(P_copy[:, j - 1, 2] / P_copy[:, j - 1, 1])
             # Fixing phi depending on X and y sign
             # 4th quandrant  (px > 0, py < 0)
             deltaphi = torch.where(
-                (P[:, j - 1, 2] < 0) & (P[:, j - 1, 1] > 0), 2 * torch.pi, 0.0
+                (P_copy[:, j - 1, 2] < 0) & (P_copy[:, j - 1, 1] > 0), 2 * torch.pi, 0.0
             )
             # 2th and 3th quadratant  (px < 0, py whatever)
-            deltaphi += torch.where((P[:, j - 1, 1] < 0), torch.pi, 0.0)
+            deltaphi += torch.where((P_copy[:, j - 1, 1] < 0), torch.pi, 0.0)
             phi += deltaphi
             r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
 
