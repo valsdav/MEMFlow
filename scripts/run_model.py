@@ -81,7 +81,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 detjac_mean = -detjac.nanmean()
                 
                 #loss = -logp_g.mean()
-                loss = -flow_loss[torch.logical_not(inf_mask)].mean()
+                if sampling_Forward:
+                    loss = flow_loss
+                else:
+                    loss = -flow_loss[torch.logical_not(inf_mask)].mean()
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -113,8 +117,13 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 inf_mask = torch.isinf(flow_loss)
                 detjac_mean = -detjac.nanmean()
                 #loss = -logp_g.mean()
+
+                if sampling_Forward:
+                    loss = flow_loss
+                else:
+                    loss = -flow_loss[torch.logical_not(inf_mask)].mean()
                 
-                loss = -flow_loss[torch.logical_not(inf_mask)].mean()
+                #loss = -flow_loss[torch.logical_not(inf_mask)].mean()
                 valid_loss += loss.item()
 
                 if i == 0:

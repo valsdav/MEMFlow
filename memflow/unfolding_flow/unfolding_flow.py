@@ -49,10 +49,7 @@ def MMD(x, y, kernel, device):
             YY += torch.exp(-0.5*dyy/a)
             XY += torch.exp(-0.5*dxy/a)
 
-
-
-    
-
+    return torch.mean(XX + YY - 2. * XY)
 
 class UnfoldingFlow(nn.Module):
     def __init__(self, model_path, log_mean, log_std, no_jets, no_lept, input_features, cond_hiddenFeatures=64,
@@ -133,16 +130,15 @@ class UnfoldingFlow(nn.Module):
 
             flow_sample = flow_sample[sample_mask]
             PS_target_masked = PS_target[sample_mask]
-
-            print(f"size flow_sample: {flow_sample.shape}")
-            print(f"size PS_target: {PS_target_masked.shape}")
+            #PS_target_grad = torch.tensor(PS_target_masked, requires_grad=True)
             
+            flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
+            PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
+
             #flow_loss = self.mmdLoss(flow_sample, PS_target_masked)
 
             # kernel: kernel type such as "multiscale" or "rbf"
-            flow_loss = MMD(x=flow_sample, y=PS_target_masked, kernel='multiscale', device=device)
-            print(flow_loss.shape)
-        
+            flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='multiscale', device=device)        
         else:
             flow_loss = self.flow(PS_regressed).log_prob(PS_target)
         

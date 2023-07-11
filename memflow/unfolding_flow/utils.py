@@ -248,6 +248,15 @@ class Compute_ParticlesTensor:
 
         detjinv_regressed = 0
 
+        maskr_0 = r < 0
+        maskr_1 = r > 1
+        
+        if (maskr_0.any() or maskr_1.any()):
+            print("ERROR: x1 or x2 lower than 0")
+            print(r[maskr_0])
+            print(r[maskr_1])
+            exit(0)
+
         x1 = x1.unsqueeze(dim=1)
         x2 = x2.unsqueeze(dim=1)
         return torch.cat((r, x1, x2), axis=1), detjinv_regressed
