@@ -228,7 +228,7 @@ class Compute_ParticlesTensor:
 
             Q[:, j - 1] = Q[:, j] + P[:, j - 1]
 
-            utils.boost_t(P[:, j - 1], -1*utils.boostVector_t(Q[:, j - 1]))
+            P[:, j - 1] = utils.boost_t(P[:, j - 1], -1*utils.boostVector_t(Q[:, j - 1]))
 
 
             r[:, n - 5 + 2 * i - 1] = (
