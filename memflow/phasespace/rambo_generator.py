@@ -612,6 +612,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         K_t = M.clone()
         Q = torch.zeros_like(P).to(P.device)
         Q[:, -1] = P[:, -1]  # Qn = pn
+        
 
         # intermediate mass
         for i in range(n, 0, -1):
@@ -619,11 +620,12 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
             K_t[:, j] = M[:,j] - torch.sum(self.masses_t[j:])
-
+        
         # output [0,1] distributed numbers
         r = torch.zeros(P.shape[0], self.nDimPhaseSpace, device=P.device)
 
         for i in range(n, 1, -1):
+            print(f'i = {i} & j = {j}')
             j = i - 1  # index for 0-based tensors
             # in the direct algo the u are squared.
             u = (K_t[:, j] / K_t[:, j - 1]) ** 2
@@ -631,14 +633,24 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             r[:, j - 1] = (n + 1 - i) * (torch.pow(u, (n - i))) - (n - i) * (
                 torch.pow(u, (n + 1 - i))
             )
+            print(r[:, j - 1])
+            print('r\n')
+            
 
             Q[:, j - 1] = Q[:, j] + P[:, j - 1]
-
-            boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
+            
+            P[:, j - 1] = boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
+            print(Q)
+            print('Q\n')
+            
+            print(P)
+            print('P\n')
 
             r[:, n - 5 + 2 * i - 1] = (
                 (P[:, j - 1, 3] / torch.sqrt(rho2_t(P[:, j - 1]))) + 1
             ) / 2
+            print(r[:, n - 5 + 2 * i - 1])
+            print('r[n-5+2*i-1]\n')
             # phi= tan^-1(Py/Px)
             phi = torch.atan(P[:, j - 1, 2] / P[:, j - 1, 1])
             # Fixing phi depending on X and y sign
@@ -650,6 +662,8 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             deltaphi += torch.where((P[:, j - 1, 1] < 0), torch.pi, 0.0)
             phi += deltaphi
             r[:, n - 4 + 2 * i - 1] = phi / (2 * torch.pi)
+            print(r[:, n - 4 + 2 * i - 1])
+            print('r[n-4+2*i-1]\n')
 
         # Get uniform from x1x2 space
         r1r2, jacinv_x1x2 = get_uniform_from_x1x2(x1, x2, self.tot_final_state_masses, self.collider_energy)
