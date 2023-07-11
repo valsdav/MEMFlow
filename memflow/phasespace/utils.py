@@ -121,6 +121,8 @@ def boost_tt(inputt, boost_vector, gamma=-1.0):
     if gamma < 0.0:
         gamma = 1.0 / torch.sqrt(1.0 - b2)
     inputt_space = inputt[:, :, 1:]
+    
+    output = inputt.clone()
 
     bp = torch.sum(inputt_space * boost_vector, -1)
 
@@ -128,11 +130,11 @@ def boost_tt(inputt, boost_vector, gamma=-1.0):
 
     factor = gamma2 * bp + gamma * inputt[:, :, 0]
 
-    inputt_space += factor.unsqueeze(-1) * boost_vector
+    output[:, :, 1:] += factor.unsqueeze(-1) * boost_vector
 
-    inputt[:, :, 0] = gamma * (inputt[:, :, 0] + bp)
+    output[:, :, 0] = gamma * (inputt[:, :, 0] + bp)
 
-    return inputt
+    return output
 
 
 def cosTheta_t(inputt):

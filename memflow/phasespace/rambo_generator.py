@@ -612,6 +612,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         K_t = M.clone()
         Q = torch.zeros_like(P).to(P.device)
         Q[:, -1] = P[:, -1]  # Qn = pn
+        
 
         # intermediate mass
         for i in range(n, 0, -1):
@@ -619,7 +620,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
             K_t[:, j] = M[:,j] - torch.sum(self.masses_t[j:])
-
+        
         # output [0,1] distributed numbers
         r = torch.zeros(P.shape[0], self.nDimPhaseSpace, device=P.device)
 
@@ -630,11 +631,11 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
 
             r[:, j - 1] = (n + 1 - i) * (torch.pow(u, (n - i))) - (n - i) * (
                 torch.pow(u, (n + 1 - i))
-            )
+            )            
 
             Q[:, j - 1] = Q[:, j] + P[:, j - 1]
-
-            boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
+            
+            P[:, j - 1] = boost_t(P[:, j - 1], -boostVector_t(Q[:, j - 1]))
 
             r[:, n - 5 + 2 * i - 1] = (
                 (P[:, j - 1, 3] / torch.sqrt(rho2_t(P[:, j - 1]))) + 1
