@@ -47,12 +47,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     # Creates a GradScaler once at the beginning of training.
     scaler = GradScaler()
 
-    sampling_Forward = config.training_params.sampling_Forward
-    print(f'SAMPLINF FORWARD = {sampling_Forward}')
+    #sampling_Forward = config.training_params.sampling_Forward
+    #print(f'SAMPLINF FORWARD = {sampling_Forward}')
     
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
+        if e % 2 == 0:
+            sampling_Forward = False
+        else:
+            sampling_Forward = True
     
         # training loop    
         print("Before training loop")
@@ -129,9 +133,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
             sum_loss += loss.item()
 
             writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
-            writer.add_scalar(f"Loss_step_train_epoch_step", loss.item(), i)
+            if sampling_Forward:
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir", loss.item(), i)
+            else:
+                 writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
 
-        writer.add_scalar('Loss_epoch_train', sum_loss/N_train, e)
+
+        if sampling_Forward:
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir", loss.item(), i)
+        else:
+            writer.add_scalar(f"Loss_epoch_train_NormalizingDir", loss.item(), i)
         valid_loss = 0
 
         # validation loop (don't update weights and gradients)
@@ -187,21 +198,22 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
                 if i == 0:
 
-                    ps_new = model.flow(PS_regressed).sample((100,))
+                    N_samples = 100 # 100 x 1024 x 10
+                    ps_new = model.flow(PS_regressed).sample((N_samples,))
 
                     data_ps_cpu = PS_target.detach().cpu()
                     ps_new_cpu = ps_new.detach().cpu()
 
                     for x in range(data_ps_cpu.size(1)):
                         fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1).flatten().numpy(),
+                        h = ax.hist2d(data_ps_cpu[:,x].tile(N_samples,1,1).flatten().numpy(),
                                         ps_new_cpu[:,:,x].flatten().numpy(),
                                         bins=50, range=((-1.5, 1.5),(-1.5, 1.5)))
                         fig.colorbar(h[3], ax=ax)
                         writer.add_figure(f"CheckElemOutside_Plot_{x}", fig, e)
 
                         fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1).flatten().numpy(),
+                        h = ax.hist2d(data_ps_cpu[:,x].tile(N_samples,1,1).flatten().numpy(),
                                     ps_new_cpu[:,:,x].flatten().numpy(),
                                     bins=50, range=((-0.1, 1.1),(-0.1, 1.1)))
                         fig.colorbar(h[3], ax=ax)
@@ -209,11 +221,14 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
                         fig, ax = plt.subplots()
                         h = ax.hist(
-                            (data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1) - ps_new_cpu[:,:,x]).flatten().numpy(),
+                            (data_ps_cpu[:,x].tile(N_samples,1,1) - ps_new_cpu[:,:,x]).flatten().numpy(),
                             bins=100)
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
-        writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
+        if sampling_Forward:
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir", loss.item(), i)
+        else:
+            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", loss.item(), i)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         
