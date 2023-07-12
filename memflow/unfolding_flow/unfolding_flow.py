@@ -9,48 +9,6 @@ from zuko.distributions import BoxUniform
 from zuko.distributions import DiagNormal
 from memflow.unfolding_flow.utils import Compute_ParticlesTensor
 
-from memflow.unfolding_flow.mmd_loss import MMDLoss
-from memflow.unfolding_flow.mmd_loss import RBF
-
-def MMD(x, y, kernel, device):
-    """Emprical maximum mean discrepancy. The lower the result
-       the more evidence that distributions are the same.
-
-    Args:
-        x: first sample, distribution P
-        y: second sample, distribution Q
-        kernel: kernel type such as "multiscale" or "rbf"
-    """
-    xx, yy, zz = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
-    rx = (xx.diag().unsqueeze(0).expand_as(xx))
-    ry = (yy.diag().unsqueeze(0).expand_as(yy))
-
-    dxx = rx.t() + rx - 2. * xx # Used for A in (1)
-    dyy = ry.t() + ry - 2. * yy # Used for B in (1)
-    dxy = rx.t() + ry - 2. * zz # Used for C in (1)
-
-    XX, YY, XY = (torch.zeros(xx.shape).to(device),
-                  torch.zeros(xx.shape).to(device),
-                  torch.zeros(xx.shape).to(device))
-
-    if kernel == "multiscale":
-
-        bandwidth_range = [0.2, 0.5, 0.9, 1.3]
-        for a in bandwidth_range:
-            XX += a**2 * (a**2 + dxx)**-1
-            YY += a**2 * (a**2 + dyy)**-1
-            XY += a**2 * (a**2 + dxy)**-1
-
-    if kernel == "rbf":
-
-        bandwidth_range = [10, 15, 20, 50]
-        for a in bandwidth_range:
-            XX += torch.exp(-0.5*dxx/a)
-            YY += torch.exp(-0.5*dyy/a)
-            XY += torch.exp(-0.5*dxy/a)
-
-    return torch.mean(XX + YY - 2. * XY)
-
 class UnfoldingFlow(nn.Module):
     def __init__(self, model_path, log_mean, log_std, no_jets, no_lept, input_features, cond_hiddenFeatures=64,
                 cond_dimFeedForward=512, cond_outFeatures=32, cond_nheadEncoder=4, cond_NoLayersEncoder=2,
@@ -96,24 +54,11 @@ class UnfoldingFlow(nn.Module):
 
         self.flow.transforms.insert(0, SimpleAffineTransform(0*torch.ones(flow_nfeatures),1*torch.ones(flow_nfeatures),
                                                      -1*torch.ones(flow_nfeatures), 1*torch.ones(flow_nfeatures)))
-
-        kernel = RBF(device=device)
-        self.mmdLoss = MMDLoss(kernel=kernel)
         
         
-    def forward(self, data, device, noProv, sampling_Forward=False, eps=0.0, order=[0,1,2,3]):
-
-        (PS_target,
-        PS_rambo_detjacobian,
-        logScaled_reco, mask_lepton_reco, 
-        mask_jets, mask_met, 
-        mask_boost_reco, data_boost_reco) = data
-
-        mask0 = PS_target < 0
-        mask1 = PS_target > 1
-        if (mask0.any() or mask1.any()):
-            print('PS target < 0 or > 1')
-            exit(0)
+    def forward(self, mask_jets, mask_lepton_reco, mask_met, mask_boost_reco,
+                logScaled_reco, data_boost_reco, 
+                device, noProv, eps=0.0, order=[0,1,2,3]):
 
         mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
@@ -122,32 +67,11 @@ class UnfoldingFlow(nn.Module):
         
         cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
         HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR_numpy(cond_X, self.log_mean,
-                                                                                    self.log_std, device, eps, order)
+                                                                                    self.log_std, device, eps)
 
         # be careful at the order of phasespace_target and PS_regressed
         # order by default: H/thad/tlep/ISR
         PS_regressed, detjinv_regressed = Compute_ParticlesTensor.get_PS(HttISR_regressed, data_boost_reco)
 
-        if sampling_Forward:
-            flow_sample = self.flow(PS_regressed).sample()
-
-            sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
-            sample_mask = torch.all(sample_mask_all, dim=1)
-
-            flow_sample = flow_sample[sample_mask]
-            PS_target_masked = PS_target[sample_mask]
-            #PS_target_grad = torch.tensor(PS_target_masked, requires_grad=True)
-            
-            flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
-            PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
-
-            #flow_loss = self.mmdLoss(flow_sample, PS_target_masked)
-
-            # kernel: kernel type such as "multiscale" or "rbf"
-            flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
-        else:
-            flow_loss = self.flow(PS_regressed).log_prob(PS_target)
-        
-        detjac = PS_rambo_detjacobian.log()
-        return flow_loss, detjac, cond_X, PS_regressed
+        return cond_X, PS_regressed
 

@@ -122,7 +122,7 @@ class Compute_ParticlesTensor:
 
         return particle_cartesian
 
-    def get_HttISR_numpy(cond_X, log_mean, log_std, device, eps=0.0, order=[0,1,2,3]):
+    def get_HttISR_numpy(cond_X, log_mean, log_std, device, eps=0.0):
 
         higgs = cond_X[0].unsqueeze(dim=1)
         thad = cond_X[1].unsqueeze(dim=1)

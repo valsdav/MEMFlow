@@ -18,6 +18,7 @@ import torch.multiprocessing as mp
 
 from torch.cuda.amp import GradScaler
 from torch import autocast
+from memflow.unfolding_flow.mmd_loss import MMD
 
 import glob
 import sys
@@ -65,12 +66,46 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
 
             optimizer.zero_grad()
 
+            (PS_target,
+            PS_rambo_detjacobian,
+            logScaled_reco, mask_lepton_reco, 
+            mask_jets, mask_met, 
+            mask_boost_reco, data_boost_reco) = data
+
+            mask0 = PS_target < 0
+            mask1 = PS_target > 1
+            if (mask0.any() or mask1.any()):
+                print('PS target < 0 or > 1')
+                exit(0)
+
             # Runs the forward pass with autocasting.
             with autocast(device_type='cuda', dtype=torch.float16):
             #if True:
-                flow_loss, detjac, cond_X, PS_regressed = model(data, device, config.noProv, 
-                                                        sampling_Forward=sampling_Forward, eps=config.training_params.eps,
-                                                        order=config.training_params.order)
+                cond_X, PS_regressed = model(mask_jets=mask_jets, mask_lepton_reco=mask_lepton_reco,
+                                            mask_met=mask_met, mask_boost_reco=mask_boost_reco,
+                                            logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
+                                            device=device, noProv=config.noProv, eps=config.training_params.eps,
+                                            order=config.training_params.order)
+
+                detjac = PS_rambo_detjacobian.log()
+                flow_sample = model.flow(PS_regressed).sample()
+                flow_prob = model.flow(PS_regressed).log_prob(PS_target)
+
+                if sampling_Forward:
+
+                    sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
+                    sample_mask = torch.all(sample_mask_all, dim=1)
+
+                    flow_sample = flow_sample[sample_mask]
+                    PS_target_masked = PS_target[sample_mask]
+                    
+                    flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
+                    PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
+
+                    # kernel: kernel type such as "multiscale" or "rbf"
+                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                else:
+                    flow_loss = -flow_prob
 
                 inf_mask = torch.isinf(flow_loss)
                 nonzeros = torch.count_nonzero(inf_mask)
@@ -79,13 +114,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
 
                 detjac_mean = -detjac.nanmean()
-                #print(torch.isnan(flow_loss).any())
                 
-                #loss = -logp_g.mean()
                 if sampling_Forward:
                     loss = flow_loss
                 else:
-                    loss = -flow_loss[torch.logical_not(inf_mask)].mean()
+                    loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -106,37 +139,57 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
         model.eval()
         for i, data in enumerate(validLoader):
 
+            (PS_target,
+            PS_rambo_detjacobian,
+            logScaled_reco, mask_lepton_reco, 
+            mask_jets, mask_met, 
+            mask_boost_reco, data_boost_reco) = data
+
             with torch.no_grad():
 
-                flow_loss, detjac, cond_X, PS_regressed = model(data, device, config.noProv, 
-                                                        sampling_Forward=sampling_Forward, eps=config.training_params.eps,
-                                                        order=config.training_params.order)
+                cond_X, PS_regressed = model(mask_jets=mask_jets, mask_lepton_reco=mask_lepton_reco,
+                                            mask_met=mask_met, mask_boost_reco=mask_boost_reco,
+                                            logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
+                                            device=device, noProv=config.noProv, eps=config.training_params.eps,
+                                            order=config.training_params.order)
 
-                #logp_g = torch.nan_to_num(flow_loss, posinf=20, neginf=-20)
-                #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
+                detjac = PS_rambo_detjacobian.log()
+
+                flow_sample = model.flow(PS_regressed).sample()
+                flow_prob = model.flow(PS_regressed).log_prob(PS_target)
+
+                if sampling_Forward:
+
+                    sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
+                    sample_mask = torch.all(sample_mask_all, dim=1)
+
+                    flow_sample = flow_sample[sample_mask]
+                    PS_target_masked = PS_target[sample_mask]
+                    
+                    flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
+                    PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
+
+                    # kernel: kernel type such as "multiscale" or "rbf"
+                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                else:
+                    flow_loss = -flow_prob
+
                 inf_mask = torch.isinf(flow_loss)
+                nonzeros = torch.count_nonzero(inf_mask)
                 detjac_mean = -detjac.nanmean()
-                #loss = -logp_g.mean()
-
+                
                 if sampling_Forward:
                     loss = flow_loss
                 else:
-                    loss = -flow_loss[torch.logical_not(inf_mask)].mean()
+                    loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
                 
-                #loss = -flow_loss[torch.logical_not(inf_mask)].mean()
                 valid_loss += loss.item()
 
                 if i == 0:
 
-                    (phasespace_intermediateParticles,
-                    phasespace_rambo_detjacobian,
-                    logScaled_reco, mask_lepton_reco, 
-                    mask_jets, mask_met, 
-                    mask_boost_reco, data_boost_reco) = data
-
                     ps_new = model.flow(PS_regressed).sample((100,))
 
-                    data_ps_cpu = phasespace_intermediateParticles.detach().cpu()
+                    data_ps_cpu = PS_target.detach().cpu()
                     ps_new_cpu = ps_new.detach().cpu()
 
                     for x in range(data_ps_cpu.size(1)):
