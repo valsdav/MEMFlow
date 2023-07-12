@@ -109,6 +109,12 @@ class UnfoldingFlow(nn.Module):
         mask_jets, mask_met, 
         mask_boost_reco, data_boost_reco) = data
 
+        mask0 = PS_target < 0
+        mask1 = PS_target > 1
+        if (mask0.any() or mask1.any()):
+            print('PS target < 0 or > 1')
+            exit(0)
+
         mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
         if (noProv):
@@ -138,7 +144,7 @@ class UnfoldingFlow(nn.Module):
             #flow_loss = self.mmdLoss(flow_sample, PS_target_masked)
 
             # kernel: kernel type such as "multiscale" or "rbf"
-            flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='multiscale', device=device)        
+            flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
         else:
             flow_loss = self.flow(PS_regressed).log_prob(PS_target)
         

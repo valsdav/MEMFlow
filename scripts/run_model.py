@@ -79,13 +79,13 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                 #detjac = torch.nan_to_num(detjac, posinf=20, neginf=-20)
 
                 detjac_mean = -detjac.nanmean()
+                #print(torch.isnan(flow_loss).any())
                 
                 #loss = -logp_g.mean()
                 if sampling_Forward:
                     loss = flow_loss
                 else:
                     loss = -flow_loss[torch.logical_not(inf_mask)].mean()
-
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -134,24 +134,30 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
                     mask_jets, mask_met, 
                     mask_boost_reco, data_boost_reco) = data
 
-                    ps_new = model.flow(PS_regressed).sample()
+                    ps_new = model.flow(PS_regressed).sample((100,))
 
                     data_ps_cpu = phasespace_intermediateParticles.detach().cpu()
                     ps_new_cpu = ps_new.detach().cpu()
 
                     for x in range(data_ps_cpu.size(1)):
                         fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].numpy(), ps_new_cpu[:,x].numpy(), bins=50, range=((-1.5, 1.5),(-1.5, 1.5)))
+                        h = ax.hist2d(data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1).flatten().numpy(),
+                                        ps_new_cpu[:,:,x].flatten().numpy(),
+                                        bins=50, range=((-1.5, 1.5),(-1.5, 1.5)))
                         fig.colorbar(h[3], ax=ax)
                         writer.add_figure(f"CheckElemOutside_Plot_{x}", fig, e)
 
                         fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].numpy(), ps_new_cpu[:,x].numpy(), bins=50, range=((-0.1, 1.1),(-0.1, 1.1)))
+                        h = ax.hist2d(data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1).flatten().numpy(),
+                                    ps_new_cpu[:,:,x].flatten().numpy(),
+                                    bins=50, range=((-0.1, 1.1),(-0.1, 1.1)))
                         fig.colorbar(h[3], ax=ax)
                         writer.add_figure(f"Validation_ramboentry_Plot_{x}", fig, e)
 
                         fig, ax = plt.subplots()
-                        h = ax.hist(data_ps_cpu[:,x].numpy() - ps_new_cpu[:,x].numpy(), bins=100)
+                        h = ax.hist(
+                            (data_ps_cpu[:,x].tile(config.training_params.sampling_points,1,1) - ps_new_cpu[:,:,x]).flatten().numpy(),
+                            bins=100)
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         writer.add_scalar('Loss_epoch_val', valid_loss/N_valid, e)
@@ -213,20 +219,17 @@ if __name__ == '__main__':
         
     # READ data
     if (conf.cartesian):
-        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64, build=True,
                                 reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
                                             'mask_jets','mask_met',
                                             'mask_boost', 'data_boost'],
-                                parton_list=['phasespace_intermediateParticles',
-                                            'phasespace_rambo_detjacobian'])
+                                parton_list=['phasespace_intermediateParticles_onShell'])
     else:
-        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64, build=True,
                                 reco_list=['scaledLogRecoParticles', 'mask_lepton', 
                                             'mask_jets','mask_met',
                                             'mask_boost', 'data_boost'],
-                                parton_list=['phasespace_intermediateParticles',
-                                            'phasespace_rambo_detjacobian'])
-
+                                parton_list=['phasespace_intermediateParticles_onShell'])
     
     # split data for training sample and validation sample
     train_subset, val_subset = torch.utils.data.random_split(
