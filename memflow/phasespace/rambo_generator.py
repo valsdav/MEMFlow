@@ -9,6 +9,10 @@ import datetime
 import sys
 from .utils import *
 
+M_HIGGS = 125.25
+M_TOP = 172.5
+M_GLUON = 0.0
+
 
 class PhaseSpaceGeneratorError(Exception):
     pass
@@ -588,13 +592,18 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
                     )
         return
 
-    def getPSpoint_batch(self, momenta_batch, x1, x2, ensure_CM=True):
+    def getPSpoint_batch(self, momenta_batch, x1, x2, order=[0,1,2,3], target_mass=torch.Tensor([[M_HIGGS, M_TOP, M_TOP, M_GLUON]]), ensure_CM=True, ensure_onShell=True):
         """Generate a self.n_final -> self.n_initial phase-space point
         using the four momenta given in input.
 
         Only the final particle momenta are given.
         The Final state is assumed to be in the CM
         """
+
+        # do the permutation of H t t ISR
+        perm = torch.LongTensor(order)
+        momenta_batch = momenta_batch[:,perm,:]
+
         n = self.n_final
         P = momenta_batch.clone()  # copy the final state particles
         
@@ -612,6 +621,12 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         K_t = M.clone()
         Q = torch.zeros_like(P).to(P.device)
         Q[:, -1] = P[:, -1]  # Qn = pn
+
+        if ensure_onShell:
+            masses_t = self.masses_t[perm].unsqueeze(dim=0)
+        else:
+            masses_t = target_mass
+        #print(masses_t.shape)
         
 
         # intermediate mass
@@ -619,7 +634,7 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
             j = i - 1
             M[:, j] = torch.sqrt(square_t(torch.sum(P[:, j:n], axis=1)))
             # Remove the final masses to convert back to K
-            K_t[:, j] = M[:,j] - torch.sum(self.masses_t[j:])
+            K_t[:, j] = M[:,j] - torch.sum(masses_t[:,j:])
         
         # output [0,1] distributed numbers
         r = torch.zeros(P.shape[0], self.nDimPhaseSpace, device=P.device)
@@ -667,15 +682,15 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         # Now for the mass case
         rambo_jac[:] *= 8.0 * self.rho(
             M[:, self.n_final - 2],
-            self.masses_t[self.n_final - 1],
-            self.masses_t[self.n_final - 2],
+            masses_t[:,self.n_final - 1],
+            masses_t[:,self.n_final - 2],
         )
         rambo_jac[:] *= torch.prod(
             (
                 self.rho(
                     M[:, : self.n_final - 2],
                     M[:, 1:],
-                    self.masses_t[: self.n_final - 2].to(M.device),
+                    masses_t[:,: self.n_final - 2].to(M.device),
                 )
                 / self.rho(K_t[:, : self.n_final - 2], K_t[:, 1:], 0.0)
             )

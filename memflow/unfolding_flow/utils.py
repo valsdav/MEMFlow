@@ -7,6 +7,7 @@ import memflow.phasespace.utils as utils
 
 M_HIGGS = 125.25
 M_TOP = 172.5
+M_GLUON = 0.0
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -146,16 +147,10 @@ class Compute_ParticlesTensor:
         E_gluon = torch.sqrt(gluon_px**2 + gluon_py**2 + gluon_pz**2) + eps # add epsilon to have positive masses of the gluon
         gluon_cartesian = torch.cat((E_gluon, gluon_px, gluon_py, gluon_pz), dim=1).unsqueeze(dim=1)
 
-        listParticles = [higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian]
-        #data_regressed = torch.cat((higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian), dim=1)
-
+        data_regressed = torch.cat((higgs_cartesian, thad_cartesian, tlep_cartesian, gluon_cartesian), dim=1)
         # order: by default higgs/thad/tlep/glISR
         # but for glISR negative masses in Rambo ==> can switch the order of the data_regressed
-        for i in range(4):
-            if i == 0:
-                data_regressed = listParticles[order[i]]
-            else:
-                data_regressed = torch.cat((data_regressed, listParticles[order[i]]), dim=1)
+        # I changed to do this permutation of the particles inside the get_PS
 
         boost_regressed = gluon_cartesian + higgs_cartesian + thad_cartesian + tlep_cartesian
         boost_regressed = boost_regressed.squeeze(dim=1)
@@ -166,7 +161,11 @@ class Compute_ParticlesTensor:
         
         return data_regressed, boost_regressed
 
-    def get_PS(data_HttISR, boost_reco):
+    def get_PS(data_HttISR, boost_reco, order=[0,1,2,3], target_mass=torch.Tensor([[M_HIGGS, M_TOP, M_TOP, M_GLUON]])):
+
+        # do the permutation of H t t ISR
+        perm = torch.LongTensor(order)
+        data_HttISR = data_HttISR[:,perm,:]
 
         E_CM = 13000
 
@@ -183,7 +182,9 @@ class Compute_ParticlesTensor:
 
         n = 4
         nDimPhaseSpace = 8
-        masses_t = torch.tensor([M_HIGGS, M_TOP, M_TOP, 0.0])
+
+        masses_t = target_mass[:,perm]
+        #print(masses_t.shape)
 
         P = data_HttISR.clone()  # copy the final state particless
         
@@ -211,7 +212,7 @@ class Compute_ParticlesTensor:
             #M[:, j] = torch.nan_to_num(M[:, j], nan=0.0)
 
             # Remove the final masses to convert back to K
-            K_t[:, j] = M[:,j] - torch.sum(masses_t[j:])
+            K_t[:, j] = M[:,j] - torch.sum(masses_t[:,j:])
 
         # output [0,1] distributed numbers        
         r = torch.zeros(P.shape[0], nDimPhaseSpace, device=P.device)
@@ -252,7 +253,7 @@ class Compute_ParticlesTensor:
         maskr_1 = r > 1
         
         if (maskr_0.any() or maskr_1.any()):
-            print("ERROR: x1 or x2 lower than 0")
+            print("ERROR: r lower than 0")
             print(r[maskr_0])
             print(r[maskr_1])
             exit(0)

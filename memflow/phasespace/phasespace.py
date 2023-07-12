@@ -99,5 +99,5 @@ class PhaseSpace:
     def get_ps_from_momenta(self, momenta, x1, x2, ensure_CM=True):
         ''' Momenta contains the two incoming particle 1 and 2 and the
         final state particles in the correct order'''
-        ps, detjacinv = self.generator.getPSpoint_batch(momenta, x1, x2, ensure_CM)
+        ps, detjacinv = self.generator.getPSpoint_batch(momenta, x1, x2)
         return ps, detjacinv
