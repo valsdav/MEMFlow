@@ -63,8 +63,17 @@ class Dataset_PartonLevel(Dataset):
             self.data_higgs_t_tbar_ISR = torch.load(
                                     self.processed_file_names("H_thad_tlep_ISR"))
 
+            print("Create new file for data_higgs_t_tbar_ISR_cartesian_onShell")
+            self.get_intermediateParticles_cartesian_onShell()
+
+            self.data_higgs_t_tbar_ISR_cartesian_onShell = torch.load(
+                                    self.processed_file_names("H_thad_tlep_ISR_cartesian_onShell"))
+
             print("Create new file for PhaseSpace + rambo detJacobian")
             self.get_PS_intermediateParticles()
+
+            print("Create new file for PhaseSpace_onShell (no negative values)")
+            self.get_PS_intermediateParticles_onShell()
 
             print("Create new file for Log_H_thad_tlep_ISR_cartesian")
             self.ProcessCartesianScaled()
@@ -84,11 +93,20 @@ class Dataset_PartonLevel(Dataset):
             self.processed_file_names("H_thad_tlep_ISR"))
         self.data_higgs_t_tbar_ISR_cartesian = torch.load(
             self.processed_file_names("H_thad_tlep_ISR_cartesian"))
+        self.data_higgs_t_tbar_ISR_cartesian_onShell = torch.load(
+            self.processed_file_names("H_thad_tlep_ISR_cartesian_onShell"))
         
         if 'phasespace_intermediateParticles' in self.parton_list:
             print("Load phasespace_intermediateParticles")
             self.phasespace_intermediateParticles = torch.load(
                 self.processed_file_names("phasespace_intermediateParticles"))
+
+        if 'phasespace_intermediateParticles_onShell' in self.parton_list:
+            print("Load phasespace_intermediateParticles_onShell")
+            self.phasespace_intermediateParticles_onShell = torch.load(
+                self.processed_file_names("phasespace_intermediateParticles_onShell"))
+            self.phasespace_rambo_detjacobian_onShell = torch.load(
+                self.processed_file_names("phasespace_rambo_detjacobian_onShell"))
 
         if 'phasespace_rambo_detjacobian' in self.parton_list:
             print("Load phasespace_rambo_detjacobian")
@@ -295,6 +313,32 @@ class Dataset_PartonLevel(Dataset):
         tensor_data = torch.tensor(intermediate_np)
         torch.save(tensor_data, self.processed_file_names(
             "H_thad_tlep_ISR_cartesian"))
+
+
+
+    def get_intermediateParticles_cartesian_onShell(self):
+        tensor_cartesian_onShell = self.data_higgs_t_tbar_ISR_cartesian.clone()
+        mass = [125.25, 172.5, 172.5, 0.000001]
+        for i in range(4):
+            tensor_cartesian_onShell[:,i,0] = torch.sqrt(tensor_cartesian_onShell[:,i,1]**2 + tensor_cartesian_onShell[:,i,2]**2 + tensor_cartesian_onShell[:,i,3]**2 + mass[i]**2)
+
+        torch.save(tensor_cartesian_onShell, self.processed_file_names(
+            "H_thad_tlep_ISR_cartesian_onShell"))
+
+
+    def get_PS_intermediateParticles_onShell(self):
+        E_CM = 13000
+        phasespace = PhaseSpace(E_CM, [21, 21], [25, 6, -6, 21], dev="cpu")
+
+        incoming_p_boost = self.data_boost
+        x1 = (incoming_p_boost[:, 0, 0] + incoming_p_boost[:, 0, 3]) / E_CM
+        x2 = (incoming_p_boost[:, 0, 0] - incoming_p_boost[:, 0, 3]) / E_CM
+        ps, detjinv = phasespace.get_ps_from_momenta(
+            self.data_higgs_t_tbar_ISR_cartesian_onShell, x1, x2)
+    
+        torch.save(ps, self.processed_file_names(
+            "phasespace_intermediateParticles_onShell"))
+        torch.save(detjinv, self.processed_file_names("phasespace_rambo_detjacobian_onShell"))
 
     def get_PS_intermediateParticles(self):
 
