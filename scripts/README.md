@@ -76,4 +76,8 @@ Script for the training of the flow
 
 By default, run it on CPU and using the training in one direction only.
 
+The results used at this moment for the flow are in: `results_pretraining_eta_correct_21June/noProv/preTraining-MEMFlow_noprov-eta_v00_0/UnfFlowEps_RamboFixed_NewDimFeedForward_rbf` or `results_pretraining_eta_correct_21June/noProv/preTraining-MEMFlow_noprov-eta_v00_0/UnfFlowEps_RamboFixed_OnshellMC_NewDimFeedForward_rbf`. The directory `UnfFlowEps_RamboFixed_NewDimFeedForward_rbf` has neg values of Rambo for PS_target (computed from the MC data) because the partons are not necessary on-shell.
+
+Both use the training in one direction (possibly except `UnfFlowEps_RamboFixed_OnshellMC_NewDimFeedForward_rbf/results_DiagNormal_FirstArg:0_Autoreg:True_SamplingTr:False`) which has a strange output.
+
 
