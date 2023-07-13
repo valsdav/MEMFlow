@@ -627,7 +627,6 @@ class FlatInvertiblePhasespace(VirtualPhaseSpaceGenerator):
         else:
             masses_t = target_mass
         #print(masses_t.shape)
-        
 
         # intermediate mass
         for i in range(n, 0, -1):

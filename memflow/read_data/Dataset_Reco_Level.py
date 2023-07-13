@@ -73,7 +73,7 @@ class Dataset_RecoLevel(Dataset):
         
         if 'recoParticles' in self.reco_list:
             print("Load recoParticles")
-        self.recoParticles = torch.load(self.processed_file_names('recoParticles'))
+            self.recoParticles = torch.load(self.processed_file_names('recoParticles'))
         
         if 'scaledLogJets' in self.reco_list:
             print("Load scaledLogJets")
@@ -317,7 +317,7 @@ class Dataset_RecoLevel(Dataset):
         meanRecoParticles, stdRecoParticles, scaledLogRecoParticles, LogRecoParticles = self.scaleTensor(recoParticles,
                                                                                   recoMask, isCartesian=False)
         
-        # attach bbtag and prov to cartesian full tensor
+        # attach btag and prov to cartesian full tensor
         scaledLogRecoParticlesCartesian = torch.cat((scaledLogRecoParticlesCartesian, recoParticles[:,:,3:]), dim=2)
         LogRecoParticlesCartesian = torch.cat((LogRecoParticlesCartesian, recoParticles[:,:,3:]), dim=2)
         
