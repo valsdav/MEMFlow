@@ -53,6 +53,8 @@ Only the `getPSpoint_batch` function was modified. It receives the momenta of th
 
 For the MC data, because here the partons are not necessary on-shell, the rambo could return negative values if the on-shell masses are used. This is why I added an argument `target_mass`, thus for each partonic event we can compute the masses of particles and use this as an input to `getPSpoint_batch`.
 
+Check always the rambo transformation that it is invertible, e.g. momenta -> PS -> momenta. This can be done using the notebook: `notebooks/RamboPartonConversion.ipynb`
+
 # Utils
 
 For some tensors, I cloned the values because `backward()` function returned `Error: in-place operation`
