@@ -25,7 +25,7 @@ import sys
 import argparse
 import os
 
-def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
+def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, alternativeTr):
     optimizer = optim.AdamW(list(model.parameters()) , lr=config.training_params.lr, weight_decay=5e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
 
@@ -47,16 +47,16 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir):
     # Creates a GradScaler once at the beginning of training.
     scaler = GradScaler()
 
-    #sampling_Forward = config.training_params.sampling_Forward
-    #print(f'SAMPLINF FORWARD = {sampling_Forward}')
+    sampling_Forward = config.training_params.sampling_Forward
     
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
-        if e % 2 == 0:
-            sampling_Forward = False
-        else:
-            sampling_Forward = True
+        if alternativeTr:
+            if e % 2 == 0:
+                sampling_Forward = False
+            else:
+                sampling_Forward = True
     
         # training loop    
         print("Before training loop")
@@ -248,12 +248,14 @@ if __name__ == '__main__':
     parser.add_argument('--model-dir', type=str, required=True, help='path to config.yaml File')
     parser.add_argument('--output-dir', type=str, required=True, help='path to output directory')
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
+    parser.add_argument('--alternativeTr', action="store_true",  help='Use Alternative Training')
     parser.add_argument('--path-config', type=str, help='by default use the file config from the pretraining directory')
     args = parser.parse_args()
     
     path_to_dir = args.model_dir
     output_dir = f'{args.model_dir}/{args.output_dir}'
     on_GPU = args.on_GPU # by default run on CPU
+    alternativeTr = args.alternativeTr # by default do the training in a specific direction
 
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
     path_to_model = glob.glob(f"{path_to_dir}/model*.pt")[0]
@@ -359,11 +361,11 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
         else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
     else:
-        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
         
     print("Training finished succesfully!")
     

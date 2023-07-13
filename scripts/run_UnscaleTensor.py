@@ -20,58 +20,21 @@ import argparse
 import os
 from pynvml import *
 
-def constrain_energy(higgs, thad, tlep, ISR, mean, std):
-
-    unscaled_higgs = higgs*std[1:] + mean[1:]
-    unscaled_thad = thad*std[1:] + mean[1:]
-    unscaled_tlep = tlep*std[1:] + mean[1:]
-    unscaled_ISR = ISR*std[1:] + mean[1:]
-
-    regressed_higgs = torch.sign(unscaled_higgs)*(torch.exp(torch.abs(unscaled_higgs)) - 1)
-    regressed_thad = torch.sign(unscaled_thad)*(torch.exp(torch.abs(unscaled_thad)) - 1)
-    regressed_tlep = torch.sign(unscaled_tlep)*(torch.exp(torch.abs(unscaled_tlep)) - 1)
-    regressed_ISR = torch.sign(unscaled_ISR)*(torch.exp(torch.abs(unscaled_ISR)) - 1)
-
-    E_higgs = torch.sqrt(M_HIGGS**2 + regressed_higgs[:,0]**2 + \
-                        regressed_higgs[:,1]**2 + regressed_higgs[:,2]**2).unsqueeze(dim=1)
-            
-    E_thad = torch.sqrt(M_TOP**2 + regressed_thad[:,0]**2 + \
-                        regressed_thad[:,1]**2 + regressed_thad[:,2]**2).unsqueeze(dim=1)
-
-    E_tlep = torch.sqrt(M_TOP**2 + regressed_tlep[:,0]**2 + \
-                        regressed_tlep[:,1]**2 + regressed_tlep[:,2]**2).unsqueeze(dim=1)
-
-    E_ISR = torch.sqrt(regressed_ISR[:,0]**2 + regressed_ISR[:,1]**2 + \
-                        regressed_ISR[:,2]**2).unsqueeze(dim=1)
-
-    logE_higgs = torch.log(1 + E_higgs)
-    logE_thad = torch.log(1 + E_thad)
-    logE_tlep = torch.log(1 + E_tlep)
-    logE_ISR = torch.log(1 + E_ISR)
-
-    logE_higgs = (logE_higgs - mean[0])/std[0]
-    logE_thad = (logE_thad - mean[0])/std[0]
-    logE_tlep = (logE_tlep - mean[0])/std[0]
-    logE_ISR = (logE_ISR - mean[0])/std[0]
-
-    return logE_higgs, logE_thad, logE_tlep, logE_ISR
-
-
-
 def UnscaleTensor(config, model, dataLoader, outputDir):
             
     outputDir = os.path.abspath(outputDir)
             
-    total_sample = conf.training_params.training_sample + conf.training_params.validation_sample
+    total_sample = config.training_params.training_sample + config.training_params.validation_sample
 
     N = len(dataLoader)
 
-    unscaledRegressedPartonsTensor = torch.zeros((total_sample, 4, 4))
+    unscaledRegressedPartonsTensor = torch.empty((total_sample,
+                                            config.conditioning_transformer.no_decoders,
+                                            config.conditioning_transformer.out_features))
     batch_size = 2048
-    #unscaledRegressedPartons = torch.zeros((batch_size, 4, 4)) # 4096 = batch_size
 
-    log_mean = torch.tensor(conf.scaling_params.log_mean, device=device)
-    log_std = torch.tensor(conf.scaling_params.log_std, device=device)
+    log_mean = torch.tensor(config.scaling_params.log_mean, device=device)
+    log_std = torch.tensor(config.scaling_params.log_std, device=device)
                 
     for i, data in enumerate(dataLoader):
 
@@ -79,37 +42,23 @@ def UnscaleTensor(config, model, dataLoader, outputDir):
             if (i % 100 == 0):
                 print(i)
                 
-            (scaledLogRecoParticlesCartesian, mask_lepton_reco, 
+            (logScaled_reco, mask_lepton_reco, 
             mask_jets, mask_met, 
             mask_boost_reco, data_boost_reco) = data
                 
             mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
             # remove prov
-            scaledLogRecoParticlesCartesian = scaledLogRecoParticlesCartesian[:,:,:5]
+            if (config.noProv):
+                logScaled_reco = logScaled_reco[:,:,:-1]
 
-            out = model(scaledLogRecoParticlesCartesian, data_boost_reco, mask_recoParticles, mask_boost_reco)
+            out = model(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
 
-            higgs = out[0]
-            thad = out[1]
-            tlep = out[2]
-            ISR = out[3]
-
-            logE_higgs, logE_thad, logE_tlep, logE_ISR = constrain_energy(higgs, thad, tlep, ISR, log_mean, log_std)
-
-            higgs = torch.concat((logE_higgs, higgs), dim=1)
-            thad = torch.concat((logE_thad, thad), dim=1)
-            tlep = torch.concat((logE_tlep, tlep), dim=1)
-            ISR = torch.concat((logE_ISR, ISR), dim=1)
-
-            out_particles = [higgs, thad, tlep, ISR]
-
-            for particle in range(len(out_particles)):
-                if out_particles[particle].shape[0] == batch_size:
-                    unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,particle,:] = out_particles[particle]
+            for particle in range(len(out)):
+                if out[particle].shape[0] == batch_size:
+                    unscaledRegressedPartonsTensor[i*batch_size:(i+1)*batch_size,particle,:] = out[particle]
                 else:
-                    unscaledRegressedPartonsTensor[i*batch_size:,particle,:] = out_particles[particle]
-
+                    unscaledRegressedPartonsTensor[i*batch_size:,particle,:] = out[particle]
 
     
     torch.save((unscaledRegressedPartonsTensor), f'{outputDir}/unscaledRegressedPartonsTensor.pt')
@@ -164,11 +113,18 @@ if __name__ == '__main__':
         print('')
     
     # READ data
-    data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
-                            reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
-                                        'mask_jets','mask_met',
-                                        'mask_boost', 'data_boost'],
-                            parton_list=[])
+    if (conf.cartesian):
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=[])
+    else:
+        data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64,
+                                reco_list=['scaledLogRecoParticles', 'mask_lepton', 
+                                            'mask_jets','mask_met',
+                                            'mask_boost', 'data_boost'],
+                                parton_list=[])
     
     data_loader = DataLoader(dataset=data, shuffle=False, batch_size=2048)
 
