@@ -25,7 +25,7 @@ import sys
 import argparse
 import os
 
-def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, alternativeTr):
+def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, alternativeTr, disableGradTransformer):
     optimizer = optim.AdamW(list(model.parameters()) , lr=config.training_params.lr, weight_decay=5e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
 
@@ -89,7 +89,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             mask_met=mask_met, mask_boost_reco=mask_boost_reco,
                                             logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
                                             device=device, noProv=config.noProv, eps=config.training_params.eps,
-                                            order=config.training_params.order)
+                                            order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
                 flow_sample = model.flow(PS_regressed).sample()
@@ -162,7 +162,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             mask_met=mask_met, mask_boost_reco=mask_boost_reco,
                                             logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
                                             device=device, noProv=config.noProv, eps=config.training_params.eps,
-                                            order=config.training_params.order)
+                                            order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
 
@@ -250,12 +250,15 @@ if __name__ == '__main__':
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     parser.add_argument('--alternativeTr', action="store_true",  help='Use Alternative Training')
     parser.add_argument('--path-config', type=str, help='by default use the file config from the pretraining directory')
+    parser.add_argument('--disable-grad-CondTransformer', action="store_true",  help='Propagate gradients for ConditionalTransformer')
     args = parser.parse_args()
     
     path_to_dir = args.model_dir
     output_dir = f'{args.model_dir}/{args.output_dir}'
     on_GPU = args.on_GPU # by default run on CPU
     alternativeTr = args.alternativeTr # by default do the training in a specific direction
+    disableGradTransf = args.disable_grad_CondTransformer
+
 
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
     path_to_model = glob.glob(f"{path_to_dir}/model*.pt")[0]
@@ -362,11 +365,11 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
         else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
+            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
     else:
-        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
         
     print("Training finished succesfully!")
     

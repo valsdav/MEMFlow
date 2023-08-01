@@ -59,14 +59,19 @@ class UnfoldingFlow(nn.Module):
         
     def forward(self, mask_jets, mask_lepton_reco, mask_met, mask_boost_reco,
                 logScaled_reco, data_boost_reco, 
-                device, noProv, eps=0.0, order=[0,1,2,3]):
+                device, noProv, eps=0.0, order=[0,1,2,3], disableGradTransformer=False):
 
         mask_recoParticles = torch.cat((mask_jets, mask_lepton_reco, mask_met), dim=1)
 
         if (noProv):
             logScaled_reco = logScaled_reco[:,:,:-1]
         
-        cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
+        if disableGradTransformer:
+            with torch.no_grad():
+                cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
+        else:
+            cond_X = self.cond_transformer(logScaled_reco, data_boost_reco, mask_recoParticles, mask_boost_reco)
+
         HttISR_regressed, boost_regressed = Compute_ParticlesTensor.get_HttISR_numpy(cond_X, self.log_mean,
                                                                                     self.log_std, device, eps)
 
