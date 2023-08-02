@@ -38,9 +38,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
     with open(f"{name_dir}/config_{config.name}_{config.version}.yaml", "w") as fo:
         fo.write(OmegaConf.to_yaml(config))
 
-    N_train = len(trainingLoader)
-    N_valid = len(validLoader)
-
     ii = 0
     early_stopper = EarlyStopper(patience=config.training_params.nEpochsPatience, min_delta=0.001)
     torch.autograd.set_detect_anomaly(True)
@@ -140,9 +137,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_train_SamplingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir", sum_loss/N_train, e)
         else:
-            writer.add_scalar(f"Loss_epoch_train_NormalizingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_train_NormalizingDir", sum_loss/N_train, e)
+
         valid_loss = 0
 
         # validation loop (don't update weights and gradients)
@@ -226,9 +224,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_val_SamplingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss/N_valid, e)
         else:
-            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss/N_valid, e)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         
