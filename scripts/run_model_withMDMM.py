@@ -190,9 +190,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_train_SamplingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir", sum_loss/N_train, e)
         else:
-            writer.add_scalar(f"Loss_epoch_train_NormalizingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_train_NormalizingDir", sum_loss/N_train, e)
+
         valid_loss = 0
 
         # validation loop (don't update weights and gradients)
@@ -245,6 +246,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 else:
                     loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
                 
+                higgs = cond_X[0]
+                thad = cond_X[1]
+                tlep = cond_X[2]
+
                 mdmm_return = MDMM_module(loss, [(logScaled_partons, higgs, thad, tlep,
                                                 config.cartesian, loss_fn, device)])
                 
@@ -280,9 +285,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_val_SamplingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss/N_valid, e)
         else:
-            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", loss.item(), e)
+            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss/N_valid, e)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         
