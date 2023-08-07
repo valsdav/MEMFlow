@@ -10,7 +10,7 @@ class ConditioningTransformerLayer(nn.Module):
                  nhead_decoder, no_layers_decoder,
                  no_decoders,
                  dim_feedforward_transformer=512,
-                 aggregate=True, dtype=torch.float32):
+                 aggregate=True, use_latent=False, dtype=torch.float32):
         super().__init__()
 
         self.nhead_encoder = nhead_encoder
@@ -19,6 +19,7 @@ class ConditioningTransformerLayer(nn.Module):
         self.no_layers_decoder = no_layers_decoder
         self.dim_feedforward_transformer = dim_feedforward_transformer
         self.no_decoders = no_decoders
+        self.use_latent = use_latent
         
         self.no_jets = no_jets
         self.no_lept = no_lept
@@ -55,9 +56,11 @@ class ConditioningTransformerLayer(nn.Module):
        
             self.transformer_decoders = nn.ModuleList([nn.TransformerEncoder(decoder_layer, num_layers=no_layers_decoder)
                                        for i in range(no_decoders)])
+
+            if self.use_latent:
+                self.latent_proj = nn.Linear(in_features=hidden_features, out_features=out_features)
             
         
-
         self.register_buffer('ones', torch.ones(no_jets, 1))
         self.register_buffer('two', 2*torch.ones(no_lept, 1))
         self.register_buffer('three', 3*torch.ones(1, 1))
@@ -121,6 +124,14 @@ class ConditioningTransformerLayer(nn.Module):
                 conditional_out = transformer_output_sum / N_valid_objects
                 
                 decoder_outputs.append(proj(self.gelu(conditional_out)))
+
+            if self.use_latent:
+                transformer_latent_sum = torch.sum(
+                    transformer_output * torch.unsqueeze(transformer_mask, -1), dim=1)  #[B, 64]
+
+                latent_out = transformer_latent_sum / N_valid_objects
+
+                decoder_outputs.append(self.latent_proj(self.gelu(latent_out)))
 
             return decoder_outputs
             
