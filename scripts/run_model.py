@@ -223,10 +223,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                             bins=100)
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
+        valid_loss = valid_loss/N_valid
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss/N_valid, e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss, e)
         else:
-            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss/N_valid, e)
+            writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss, e)
 
         if early_stopper.early_stop(valid_loss, model.state_dict(), optimizer.state_dict(), modelName):
             print(f"Model converges at epoch {e} !!!")         

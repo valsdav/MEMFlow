@@ -448,8 +448,7 @@ class SavePlots:
 def return_Interval(regressedVar, correctVar, targetVar, lim=(0,1), ratio=False):
     diffRegression = regressedVar - correctVar
     if ratio==True:
-        ratioRegression = diffRegression/targetVar
-        diffRegression = ratioRegression/correctVar
+        diffRegression = diffRegression/correctVar
 
     indices = np.where((targetVar >= lim[0])  & (targetVar < lim[1]))[0]
     ratioRegression_interval = diffRegression[indices]
