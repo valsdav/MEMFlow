@@ -75,7 +75,7 @@ def TrainingAndValidLoop(config, device, model, trainingLoader, validLoader, out
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
     
     outputDir = os.path.abspath(outputDir)
-    name_dir = f'{outputDir}/preTraining_noProv:{config.noProv}_cartesian:{config.cartesian}_latent_space:{latentSpace}_hiddenFeatures:{config.conditioning_transformer.hidden_features}_dimFeedForward:{config.conditioning_transformer.dim_feedforward_transformer}_nheadEnc:{config.conditioning_transformer.nhead_encoder}_LayersEnc:{config.conditioning_transformer.no_layers_encoder}_nheadDec:{config.conditioning_transformer.nhead_decoder}_LayersDec:{config.conditioning_transformer.no_layers_decoder}'
+    name_dir = f'{outputDir}/preTraining_noProv:{config.noProv}_cartesian:{config.cartesian}_HuberLoss:{HuberLoss}_latent_space:{latentSpace}_hiddenFeatures:{config.conditioning_transformer.hidden_features}_dimFeedForward:{config.conditioning_transformer.dim_feedforward_transformer}_nheadEnc:{config.conditioning_transformer.nhead_encoder}_LayersEnc:{config.conditioning_transformer.no_layers_encoder}_nheadDec:{config.conditioning_transformer.nhead_decoder}_LayersDec:{config.conditioning_transformer.no_layers_decoder}'
     
     writer = SummaryWriter(name_dir)
 
