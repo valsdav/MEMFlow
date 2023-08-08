@@ -184,9 +184,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
             writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
             if sampling_Forward:
-                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir", loss.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
             else:
-                 writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
+                 writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
+                  writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
 
 
         if sampling_Forward:
