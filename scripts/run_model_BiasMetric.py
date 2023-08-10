@@ -4,9 +4,9 @@ from memflow.unfolding_network.conditional_transformer import ConditioningTransf
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from earlystop import EarlyStopper
 import yaml
+import mdmm
 from yaml.loader import SafeLoader
 import torch
-import mdmm
 from torch import optim
 from torch.utils.data import DataLoader
 import numpy as np
@@ -26,56 +26,27 @@ import sys
 import argparse
 import os
 
-PI = torch.pi
+def BiasLoss_Mean(PS_Target, Flow_Sample):
+    DiffSamplingTarget = PS_Target - Flow_Sample
+    biasDistrib = torch.mean(DiffSamplingTarget, dim=0)
+    return torch.mean(biasDistrib, dim=0)
 
-def loss_fn_periodic(input, target, loss_fn, device):
-
-    deltaPhi = target - input
-    deltaPhi = torch.where(deltaPhi > PI, deltaPhi - 2*PI, deltaPhi)
-    deltaPhi = torch.where(deltaPhi <= -PI, deltaPhi + 2*PI, deltaPhi)
-    
-    return loss_fn(deltaPhi, torch.zeros(deltaPhi.shape, device=device))
-
-def compute_losses(logScaled_partons, higgs, thad, tlep, cartesian, loss_fn, device):
-    lossH = 0
-    lossThad = 0
-    lossTlep = 0
-
-    if cartesian:
-        lossH = loss_fn(logScaled_partons[:,0], higgs)
-        lossThad =  loss_fn(logScaled_partons[:,1], thad)
-        lossTlep =  loss_fn(logScaled_partons[:,2], tlep)
-    else:
-        for feature in range(higgs.shape[1]):
-            # if feature != phi
-            if feature != 2:
-                lossH += loss_fn(logScaled_partons[:,0,feature], higgs[:,feature])
-                lossThad +=  loss_fn(logScaled_partons[:,1,feature], thad[:,feature])
-                lossTlep +=  loss_fn(logScaled_partons[:,2,feature], tlep[:,feature])
-            # case when feature is equal to phi (phi is periodic variable)
-            else:
-                lossH += loss_fn_periodic(higgs[:,feature], logScaled_partons[:,0,feature], loss_fn, device)
-                lossThad +=  loss_fn_periodic(thad[:,feature], logScaled_partons[:,1,feature], loss_fn, device)
-                lossTlep +=  loss_fn_periodic(tlep[:,feature], logScaled_partons[:,2,feature], loss_fn, device)
-
-        lossH = lossH/higgs.shape[1]
-        lossThad = lossThad/thad.shape[1]
-        lossTlep = lossTlep/tlep.shape[1]
-
-        loss = lossH + lossThad + lossTlep
-    
-    return loss
+def BiasLoss_Std(PS_Target, Flow_Sample):
+    DiffSamplingTarget = PS_Target - Flow_Sample
+    biasDistrib = torch.mean(DiffSamplingTarget, dim=0)
+    return torch.std(biasDistrib, dim=0)
 
 def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, alternativeTr, disableGradTransformer):
 
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
+    scaler = GradScaler()
 
     # Define the constraint
     epsilon = config.MDMM.eps
     constraint = mdmm.MaxConstraint(
-                    compute_losses,
-                    max=1.27, # to be modified based on the regression
+                    BiasLoss_Std,
+                    max=0.01, # to be modified based on the regression
                     scale=epsilon,
                     damping=5,
                     )
@@ -84,7 +55,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
     MDMM_module = mdmm.MDMM([constraint]) # support many constraints TODO: use a constraint for every particle
     optimizer = MDMM_module.make_optimizer(model.parameters(), lr=config.training_params.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
-    loss_fn = torch.nn.MSELoss() # compute_loss function receives loss_fn
     
     name_dir = f'{outputDir}/results_{config.unfolding_flow.base}_FirstArg:{config.unfolding_flow.base_first_arg}_Autoreg:{config.unfolding_flow.autoregressive}_NoTransf:{config.unfolding_flow.ntransforms}_NoBins:{config.unfolding_flow.bins}_DNN:{config.unfolding_flow.hiddenMLP_NoLayers}:{config.unfolding_flow.hiddenMLP_LayerDim}_epsMDMM:{config.MDMM.eps}'
     modelName = f"{name_dir}/model_flow.pt"
@@ -101,6 +71,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
+        bias_sum_loss = 0.
+
         if alternativeTr:
             if e % 2 == 0:
                 sampling_Forward = False
@@ -119,8 +91,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
             optimizer.zero_grad()
 
-            (logScaled_partons,
-            PS_target,
+            (PS_target,
             PS_rambo_detjacobian,
             logScaled_reco, mask_lepton_reco, 
             mask_jets, mask_met, 
@@ -132,7 +103,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 print('PS target < 0 or > 1')
                 exit(0)
 
-            if True:
+            # Runs the forward pass with autocasting.
+            with autocast(device_type='cuda', dtype=torch.float16):
+            #if True:
                 cond_X, PS_regressed = model(mask_jets=mask_jets, mask_lepton_reco=mask_lepton_reco,
                                             mask_met=mask_met, mask_boost_reco=mask_boost_reco,
                                             logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
@@ -140,10 +113,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
-                flow_sample = model.flow(PS_regressed).sample()
                 flow_prob = model.flow(PS_regressed).log_prob(PS_target)
 
                 if sampling_Forward:
+
+                    flow_sample = model.flow(PS_regressed).sample((100,))
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -154,14 +128,18 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
                     PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
 
-                    # kernel: kernel type such as "multiscale" or "rbf"
-                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                    biasMeanLoss = BiasLoss_Mean(PS_target_grad, flow_sample_grad)
+                    mdmm_return = MDMM_module(biasMeanLoss, [(PS_target_grad, flow_sample_grad)])
+
+                    flow_loss = mdmm_return.value
+                    bias_sum_loss += biasMeanLoss
+
                 else:
                     flow_loss = -flow_prob
 
                 inf_mask = torch.isinf(flow_loss)
                 nonzeros = torch.count_nonzero(inf_mask)
-                writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
+                #writer.add_scalar(f"Number_INF_flow_{e}", nonzeros.item(), i)
 
                 detjac_mean = -detjac.nanmean()
                 
@@ -170,41 +148,37 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 else:
                     loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
 
-            higgs = cond_X[0]
-            thad = cond_X[1]
-            tlep = cond_X[2]
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            #loss.backward()
+            #optimizer.step()
 
-            mdmm_return = MDMM_module(loss, [(logScaled_partons, higgs, thad, tlep,
-                                                config.cartesian, loss_fn, device)])
-
-            mdmm_return.value.backward()
-            optimizer.step()
-
-            sum_loss += mdmm_return.value.item()
+            sum_loss += loss.item()
 
             writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
             if sampling_Forward:
-                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
-                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", loss.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_BiasMeanLoss", biasMeanLoss, i)
             else:
-                 writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
-                  writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
+                 writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
 
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_train_SamplingDir", sum_loss/N_train, e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir_MDMMLoss", sum_loss/N_train, e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir_BiasMeanLoss", 2*bias_sum_loss/N_train, e)
         else:
             writer.add_scalar(f"Loss_epoch_train_NormalizingDir", sum_loss/N_train, e)
 
-        valid_loss = 0
+        valid_loss = 0.
+        bias_sum_valid = 0.
 
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
         model.eval()
         for i, data in enumerate(validLoader):
 
-            (logScaled_partons,
-            PS_target,
+            (PS_target,
             PS_rambo_detjacobian,
             logScaled_reco, mask_lepton_reco, 
             mask_jets, mask_met, 
@@ -219,11 +193,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
-
-                flow_sample = model.flow(PS_regressed).sample()
                 flow_prob = model.flow(PS_regressed).log_prob(PS_target)
 
                 if sampling_Forward:
+
+                    flow_sample = model.flow(PS_regressed).sample((100,))
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -231,11 +205,15 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     flow_sample = flow_sample[sample_mask]
                     PS_target_masked = PS_target[sample_mask]
                     
-                    flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
-                    PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
+                    flow_sample_grad = flow_sample.clone().detach()
+                    PS_target_grad = PS_target_masked.clone().detach()
 
-                    # kernel: kernel type such as "multiscale" or "rbf"
-                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                    biasMeanLoss = BiasLoss_Mean(PS_target_grad, flow_sample_grad)
+                    mdmm_return = MDMM_module(biasMeanLoss, [(PS_target_grad, flow_sample_grad)])
+
+                    flow_loss = mdmm_return.value
+                    bias_sum_valid += biasMeanLoss
+
                 else:
                     flow_loss = -flow_prob
 
@@ -248,14 +226,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 else:
                     loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
                 
-                higgs = cond_X[0]
-                thad = cond_X[1]
-                tlep = cond_X[2]
-
-                mdmm_return = MDMM_module(loss, [(logScaled_partons, higgs, thad, tlep,
-                                                config.cartesian, loss_fn, device)])
+                valid_loss += loss.item()
                 
-                valid_loss += mdmm_return.value.item()
 
                 if i == 0:
 
@@ -266,12 +238,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     ps_new_cpu = ps_new.detach().cpu()
 
                     for x in range(data_ps_cpu.size(1)):
-                        fig, ax = plt.subplots()
-                        h = ax.hist2d(data_ps_cpu[:,x].tile(N_samples,1,1).flatten().numpy(),
-                                        ps_new_cpu[:,:,x].flatten().numpy(),
-                                        bins=50, range=((-1.5, 1.5),(-1.5, 1.5)))
-                        fig.colorbar(h[3], ax=ax)
-                        writer.add_figure(f"CheckElemOutside_Plot_{x}", fig, e)
 
                         fig, ax = plt.subplots()
                         h = ax.hist2d(data_ps_cpu[:,x].tile(N_samples,1,1).flatten().numpy(),
@@ -287,8 +253,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         valid_loss = valid_loss/N_valid
+        bias_sum_valid = 2*bias_sum_valid/N_valid
+
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss, e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir_MDMMLoss", valid_loss, e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir_BiasLoss", bias_sum_valid, e)
         else:
             writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss, e)
 
@@ -312,13 +281,15 @@ if __name__ == '__main__':
     parser.add_argument('--on-GPU', action="store_true",  help='run on GPU boolean')
     parser.add_argument('--alternativeTr', action="store_true",  help='Use Alternative Training')
     parser.add_argument('--path-config', type=str, help='by default use the file config from the pretraining directory')
+    parser.add_argument('--disable-grad-CondTransformer', action="store_true",  help='Propagate gradients for ConditionalTransformer')
     args = parser.parse_args()
     
     path_to_dir = args.model_dir
     output_dir = f'{args.model_dir}/{args.output_dir}'
     on_GPU = args.on_GPU # by default run on CPU
     alternativeTr = args.alternativeTr # by default do the training in a specific direction
-    disableGradTransf = False
+    disableGradTransf = args.disable_grad_CondTransformer
+
 
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
     path_to_model = glob.glob(f"{path_to_dir}/model*.pt")[0]
@@ -337,7 +308,7 @@ if __name__ == '__main__':
     if on_GPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
-        device = torch.device('cpu')  
+        device = torch.device('cpu')
         
     # READ data
     if (conf.cartesian):
@@ -345,16 +316,14 @@ if __name__ == '__main__':
                                 reco_list=['scaledLogRecoParticlesCartesian', 'mask_lepton', 
                                             'mask_jets','mask_met',
                                             'mask_boost', 'data_boost'],
-                                parton_list=['logScaled_data_higgs_t_tbar_ISR_cartesian',
-                                            'phasespace_intermediateParticles_onShell',
+                                parton_list=['phasespace_intermediateParticles_onShell',
                                             'phasespace_rambo_detjacobian_onShell'])
     else:
         data = DatasetCombined(conf.input_dataset, dev=device, dtype=torch.float64, build=True,
                                 reco_list=['scaledLogRecoParticles', 'mask_lepton', 
                                             'mask_jets','mask_met',
                                             'mask_boost', 'data_boost'],
-                                parton_list=['logScaled_data_higgs_t_tbar_ISR',
-                                            'phasespace_intermediateParticles_onShell',
+                                parton_list=['phasespace_intermediateParticles_onShell',
                                             'phasespace_rambo_detjacobian_onShell'])
     
     # split data for training sample and validation sample

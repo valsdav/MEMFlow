@@ -133,7 +133,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
             if sampling_Forward:
                 writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir", loss.item(), i)
             else:
-                 writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
 
 
         if sampling_Forward:
@@ -258,7 +258,6 @@ if __name__ == '__main__':
     alternativeTr = args.alternativeTr # by default do the training in a specific direction
     disableGradTransf = args.disable_grad_CondTransformer
 
-
     path_to_conf = glob.glob(f"{path_to_dir}/*.yaml")[0]
     path_to_model = glob.glob(f"{path_to_dir}/model*.pt")[0]
 
@@ -276,18 +275,7 @@ if __name__ == '__main__':
     if on_GPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
-        device = torch.device('cpu')
-
-    if (device == torch.device('cuda')):
-        torch.cuda.empty_cache()
-        env_var = os.environ.get("CUDA_VISIBLE_DEVICES")
-        if env_var:
-            actual_devices = env_var.split(",")
-            actual_devices = [int(d) for d in actual_devices]
-        else:
-            actual_devices = list(range(torch.cuda.device_count()))
-        print("Actual devices: ", actual_devices)
-        
+        device = torch.device('cpu') 
         
     # READ data
     if (conf.cartesian):

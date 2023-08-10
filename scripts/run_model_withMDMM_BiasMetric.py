@@ -28,6 +28,16 @@ import os
 
 PI = torch.pi
 
+def BiasLoss_Mean(PS_Target, Flow_Sample):
+    DiffSamplingTarget = PS_Target - Flow_Sample
+    biasDistrib = torch.mean(DiffSamplingTarget, dim=0)
+    return torch.mean(biasDistrib, dim=0)
+
+def BiasLoss_Std(PS_Target, Flow_Sample):
+    DiffSamplingTarget = PS_Target - Flow_Sample
+    biasDistrib = torch.mean(DiffSamplingTarget, dim=0)
+    return torch.std(biasDistrib, dim=0)
+
 def loss_fn_periodic(input, target, loss_fn, device):
 
     deltaPhi = target - input
@@ -80,8 +90,17 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     damping=5,
                     )
 
+    constraint_bias = mdmm.MaxConstraint(
+                    BiasLoss_Std,
+                    max=0.01, # to be modified based on the regression
+                    scale=epsilon,
+                    damping=5,
+                    )
+
     # Create the optimizer
     MDMM_module = mdmm.MDMM([constraint]) # support many constraints TODO: use a constraint for every particle
+    MDMM_module_bias = mdmm.MDMM([constraint_bias]) # support many constraints TODO: use a constraint for every particle
+
     optimizer = MDMM_module.make_optimizer(model.parameters(), lr=config.training_params.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=10)
     loss_fn = torch.nn.MSELoss() # compute_loss function receives loss_fn
@@ -140,10 +159,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
-                flow_sample = model.flow(PS_regressed).sample()
                 flow_prob = model.flow(PS_regressed).log_prob(PS_target)
 
                 if sampling_Forward:
+
+                    flow_sample = model.flow(PS_regressed).sample((100,))
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -154,8 +174,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
                     PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
 
-                    # kernel: kernel type such as "multiscale" or "rbf"
-                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                    biasMeanLoss = BiasLoss_Mean(PS_target_grad, flow_sample_grad)
+                    mdmm_return = MDMM_module_bias(biasMeanLoss, [(PS_target_grad, flow_sample_grad)])
+
+                    flow_loss = mdmm_return.value
+                    bias_sum_loss += biasMeanLoss
+
                 else:
                     flow_loss = -flow_prob
 
@@ -177,22 +201,25 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
             mdmm_return = MDMM_module(loss, [(logScaled_partons, higgs, thad, tlep,
                                                 config.cartesian, loss_fn, device)])
 
-            mdmm_return.value.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            #loss.backward()
+            #optimizer.step()
 
-            sum_loss += mdmm_return.value.item()
+            sum_loss += loss.item()
 
             writer.add_scalar(f"detJacOnly_epoch_step", detjac_mean.item(), i)
             if sampling_Forward:
-                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
-                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", loss.item(), i)
+                writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_BiasMeanLoss", biasMeanLoss, i)
             else:
-                 writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_LossFlowOnly", loss.item(), i)
-                  writer.add_scalar(f"Loss_step_train_epoch_step_SamplingDir_MDMMLoss", mdmm_return.value.item(), i)
+                 writer.add_scalar(f"Loss_step_train_epoch_step_Normalizing_dir", loss.item(), i)
 
 
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_train_SamplingDir", sum_loss/N_train, e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir_MDMMLoss", sum_loss/N_train, e)
+            writer.add_scalar(f"Loss_epoch_train_SamplingDir_BiasMeanLoss", 2*bias_sum_loss/N_train, e)
         else:
             writer.add_scalar(f"Loss_epoch_train_NormalizingDir", sum_loss/N_train, e)
 
@@ -219,11 +246,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                                             order=config.training_params.order, disableGradTransformer=disableGradTransformer)
 
                 detjac = PS_rambo_detjacobian.log()
-
-                flow_sample = model.flow(PS_regressed).sample()
                 flow_prob = model.flow(PS_regressed).log_prob(PS_target)
 
                 if sampling_Forward:
+
+                    flow_sample = model.flow(PS_regressed).sample((100,))
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -231,11 +258,15 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                     flow_sample = flow_sample[sample_mask]
                     PS_target_masked = PS_target[sample_mask]
                     
-                    flow_sample_grad = flow_sample.clone().detach().requires_grad_(True)
-                    PS_target_grad = PS_target_masked.clone().detach().requires_grad_(True)
+                    flow_sample_grad = flow_sample.clone().detach()
+                    PS_target_grad = PS_target_masked.clone().detach()
 
-                    # kernel: kernel type such as "multiscale" or "rbf"
-                    flow_loss = MMD(x=flow_sample_grad, y=PS_target_grad, kernel='rbf', device=device)        
+                    biasMeanLoss = BiasLoss_Mean(PS_target_grad, flow_sample_grad)
+                    mdmm_return = MDMM_module_bias(biasMeanLoss, [(PS_target_grad, flow_sample_grad)])
+
+                    flow_loss = mdmm_return.value
+                    bias_sum_valid += biasMeanLoss
+
                 else:
                     flow_loss = -flow_prob
 
@@ -287,8 +318,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         valid_loss = valid_loss/N_valid
+        bias_sum_valid = 2*bias_sum_valid/N_valid
+
         if sampling_Forward:
-            writer.add_scalar(f"Loss_epoch_val_SamplingDir", valid_loss, e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir_MDMMLoss", valid_loss, e)
+            writer.add_scalar(f"Loss_epoch_val_SamplingDir_BiasLoss", bias_sum_valid, e)
         else:
             writer.add_scalar(f"Loss_epoch_val_NormalizingDir", valid_loss, e)
 
