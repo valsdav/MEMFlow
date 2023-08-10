@@ -405,7 +405,7 @@ if __name__ == '__main__':
     if (device == torch.device('cuda')):
         
         # TODO: split the data for multi-GPU processing
-        if len(actual_devices) > 1:
+        #if len(actual_devices) > 1:
             #world_size = torch.cuda.device_count()
             # make a dictionary with k: rank, v: actual device
             #dev_dct = {i: actual_devices[i] for i in range(world_size)}
@@ -416,9 +416,9 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
-        else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        #else:
+        #    TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
     else:
         TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
         

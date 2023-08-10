@@ -120,6 +120,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
     for e in range(config.training_params.nepochs):
         
         sum_loss = 0.
+        bias_sum_loss = 0.
+
         if alternativeTr:
             if e % 2 == 0:
                 sampling_Forward = False
@@ -163,7 +165,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,))
+                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
+
+                    PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
+                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -201,11 +208,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
             mdmm_return = MDMM_module(loss, [(logScaled_partons, higgs, thad, tlep,
                                                 config.cartesian, loss_fn, device)])
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            #loss.backward()
-            #optimizer.step()
+            loss.backward()
+            optimizer.step()
 
             sum_loss += loss.item()
 
@@ -223,7 +227,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
         else:
             writer.add_scalar(f"Loss_epoch_train_NormalizingDir", sum_loss/N_train, e)
 
-        valid_loss = 0
+        valid_loss = 0.
+        bias_sum_valid = 0.
 
         # validation loop (don't update weights and gradients)
         print("Before validation loop")
@@ -250,7 +255,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,))
+                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
+
+                    PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
+                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -318,9 +328,9 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         valid_loss = valid_loss/N_valid
-        bias_sum_valid = 2*bias_sum_valid/N_valid
 
         if sampling_Forward:
+            bias_sum_valid = 2*bias_sum_valid/N_valid
             writer.add_scalar(f"Loss_epoch_val_SamplingDir_MDMMLoss", valid_loss, e)
             writer.add_scalar(f"Loss_epoch_val_SamplingDir_BiasLoss", bias_sum_valid, e)
         else:
@@ -439,7 +449,7 @@ if __name__ == '__main__':
     if (device == torch.device('cuda')):
         
         # TODO: split the data for multi-GPU processing
-        if len(actual_devices) > 1:
+        #if len(actual_devices) > 1:
             #world_size = torch.cuda.device_count()
             # make a dictionary with k: rank, v: actual device
             #dev_dct = {i: actual_devices[i] for i in range(world_size)}
@@ -450,9 +460,9 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
-        else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        #else:
+        #    TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
     else:
         TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
         

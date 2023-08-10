@@ -40,7 +40,6 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
     N_train = len(trainingLoader)
     N_valid = len(validLoader)
-    scaler = GradScaler()
 
     # Define the constraint
     epsilon = config.MDMM.eps
@@ -104,8 +103,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 exit(0)
 
             # Runs the forward pass with autocasting.
-            with autocast(device_type='cuda', dtype=torch.float16):
-            #if True:
+            #with autocast(device_type='cuda', dtype=torch.float16):
+            if True:
                 cond_X, PS_regressed = model(mask_jets=mask_jets, mask_lepton_reco=mask_lepton_reco,
                                             mask_met=mask_met, mask_boost_reco=mask_boost_reco,
                                             logScaled_reco=logScaled_reco, data_boost_reco=data_boost_reco, 
@@ -117,7 +116,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,))
+                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
+
+                    PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
+                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -148,11 +152,8 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                 else:
                     loss = flow_loss[torch.logical_not(inf_mask)].mean() # dont take infinities into consideration
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            #loss.backward()
-            #optimizer.step()
+            loss.backward()
+            optimizer.step()
 
             sum_loss += loss.item()
 
@@ -197,7 +198,12 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,))
+                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
+
+                    PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
+                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
@@ -253,9 +259,10 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
                         writer.add_figure(f"Validation_ramboentry_Diff_{x}", fig, e)
 
         valid_loss = valid_loss/N_valid
-        bias_sum_valid = 2*bias_sum_valid/N_valid
+        
 
         if sampling_Forward:
+            bias_sum_valid = 2*bias_sum_valid/N_valid
             writer.add_scalar(f"Loss_epoch_val_SamplingDir_MDMMLoss", valid_loss, e)
             writer.add_scalar(f"Loss_epoch_val_SamplingDir_BiasLoss", bias_sum_valid, e)
         else:
@@ -374,7 +381,7 @@ if __name__ == '__main__':
     if (device == torch.device('cuda')):
         
         # TODO: split the data for multi-GPU processing
-        if len(actual_devices) > 1:
+        #if len(actual_devices) > 1:
             #world_size = torch.cuda.device_count()
             # make a dictionary with k: rank, v: actual device
             #dev_dct = {i: actual_devices[i] for i in range(world_size)}
@@ -385,9 +392,9 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
-        else:
-            TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
+        #else:
+        #    TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
     else:
         TrainingAndValidLoop(conf, model, train_loader, val_loader, output_dir, alternativeTr, disableGradTransf)
         
