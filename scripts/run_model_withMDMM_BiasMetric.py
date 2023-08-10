@@ -30,7 +30,7 @@ PI = torch.pi
 
 def BiasLoss_Mean(PS_Target, Flow_Sample):
     DiffSamplingTarget = PS_Target - Flow_Sample
-    biasDistrib = torch.mean(DiffSamplingTarget, dim=0)
+    biasDistrib = torch.abs(torch.mean(DiffSamplingTarget, dim=0))
     return torch.mean(biasDistrib, dim=0)
 
 def BiasLoss_Std(PS_Target, Flow_Sample):
