@@ -386,8 +386,8 @@ class Dataset_PartonLevel(Dataset):
         scaledIntermediateParticles = \
             (log_intermediateParticles - mean_LogIntermediateParticles[None,None,:])/std_LogIntermediateParticles[None,None,:]
         
-        torch.save(log_intermediateParticles, self.processed_file_names(
-            "Log_H_thad_tlep_ISR_cartesian"))
+        #torch.save(log_intermediateParticles, self.processed_file_names(
+        #    "Log_H_thad_tlep_ISR_cartesian"))
         torch.save((mean_LogIntermediateParticles, std_LogIntermediateParticles), self.processed_file_names(
             "Log_mean_std_H_thad_tlep_ISR_cartesian"))
         torch.save(scaledIntermediateParticles, self.processed_file_names(
@@ -407,8 +407,8 @@ class Dataset_PartonLevel(Dataset):
         scaledIntermediateParticles = \
             (log_intermediateParticles - mean_LogIntermediateParticles[None,None,:])/std_LogIntermediateParticles[None,None,:]
         
-        torch.save(log_intermediateParticles, self.processed_file_names(
-            "Log_H_thad_tlep_ISR"))
+        #torch.save(log_intermediateParticles, self.processed_file_names(
+        #    "Log_H_thad_tlep_ISR"))
         torch.save((mean_LogIntermediateParticles, std_LogIntermediateParticles), self.processed_file_names(
             "Log_mean_std_H_thad_tlep_ISR"))
         torch.save(scaledIntermediateParticles, self.processed_file_names(

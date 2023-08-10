@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class Dataset_RecoLevel(Dataset):
-    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost", "boost_objBoosted"], dev=None, debug=False,
+    def __init__(self, root, object_types=["jets", "lepton_reco", "met", "boost"], dev=None, debug=False,
                  dtype=None, build=False, reco_list=[]):
 
         self.fields = {
@@ -63,7 +63,7 @@ class Dataset_RecoLevel(Dataset):
             self.mask_lepton, self.data_lepton = torch.load(self.processed_file_names("lepton_reco"))
             self.mask_met, self.data_met = torch.load(self.processed_file_names("met"))
             self.mask_boost, self.data_boost = torch.load(self.processed_file_names("boost"))
-            self.mask_boost_objBoosted, self.data_boost_objBoosted = torch.load(self.processed_file_names("boost_objBoosted"))
+            #self.mask_boost_objBoosted, self.data_boost_objBoosted = torch.load(self.processed_file_names("boost_objBoosted"))
         
         print("Reading reco_level Files")
 
@@ -323,10 +323,10 @@ class Dataset_RecoLevel(Dataset):
         
         torch.save((recoParticles), self.processed_file_names('recoParticles'))
         
-        torch.save((scaledLogJets, LogJets, meanJets, stdJets), self.processed_file_names('scaledLogJets'))
-        torch.save((scaledLogLepton, LogLepton, meanLepton, stdLepton), self.processed_file_names('scaledLogLepton'))
-        torch.save((scaledLogMet, LogMet, meanMet, stdMet), self.processed_file_names('scaledLogMet'))
-        torch.save((scaledLogBoost, LogBoost, meanBoost, stdBoost), self.processed_file_names('scaledLogBoost'))
+        #torch.save((scaledLogJets, LogJets, meanJets, stdJets), self.processed_file_names('scaledLogJets'))
+        #torch.save((scaledLogLepton, LogLepton, meanLepton, stdLepton), self.processed_file_names('scaledLogLepton'))
+        #torch.save((scaledLogMet, LogMet, meanMet, stdMet), self.processed_file_names('scaledLogMet'))
+        #torch.save((scaledLogBoost, LogBoost, meanBoost, stdBoost), self.processed_file_names('scaledLogBoost'))
         torch.save((scaledLogRecoParticlesCartesian, LogRecoParticlesCartesian, meanRecoCartesian, stdRecoCartesian),
                        self.processed_file_names('scaledLogRecoParticlesCartesian'))
         torch.save((scaledLogRecoParticles, LogRecoParticles, meanRecoParticles, stdRecoParticles),
