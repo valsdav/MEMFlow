@@ -249,16 +249,6 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
     else:
         device = torch.device('cpu')
-
-    if (device == torch.device('cuda')):
-        torch.cuda.empty_cache()
-        env_var = os.environ.get("CUDA_VISIBLE_DEVICES")
-        if env_var:
-            actual_devices = env_var.split(",")
-            actual_devices = [int(d) for d in actual_devices]
-        else:
-            actual_devices = list(range(torch.cuda.device_count()))
-        print("Actual devices: ", actual_devices)
     
     # READ data
     if (conf.cartesian):
@@ -297,15 +287,6 @@ if __name__ == '__main__':
                                     aggregate=conf.conditioning_transformer.aggregate,
                                     use_latent=use_latentSpace,
                                     dtype=torch.float64)
-    
-    if (device == torch.device('cuda')):
-        nvmlInit()
-        h = nvmlDeviceGetHandleByIndex(0)
-        info = nvmlDeviceGetMemoryInfo(h)
-        print(f'\ntotal    : {info.total}')
-        print(f'free     : {info.free}')
-        print(f'used     : {info.used}')
-        nvmlShutdown()
 
     # Copy model on GPU memory
     if (device == torch.device('cuda')):
@@ -316,7 +297,7 @@ if __name__ == '__main__':
     if (device == torch.device('cuda')):
         
         # TODO: split the data for multi-GPU processing
-        if len(actual_devices) > 1:
+        #if len(actual_devices) > 1:
             #world_size = torch.cuda.device_count()
             # make a dictionary with k: rank, v: actual device
             #dev_dct = {i: actual_devices[i] for i in range(world_size)}
@@ -327,9 +308,9 @@ if __name__ == '__main__':
             #    nprocs=world_size,
             #    join=True,
             #)
-            TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir, use_huberLoss, use_latentSpace)
-        else:
-            TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir, use_huberLoss, use_latentSpace)
+        TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir, use_huberLoss, use_latentSpace)
+        #else:
+        #    TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir, use_huberLoss, use_latentSpace)
     else:
         TrainingAndValidLoop(conf, device, model, train_loader, val_loader, outputDir, use_huberLoss, use_latentSpace)
         

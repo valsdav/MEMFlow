@@ -412,7 +412,7 @@ if __name__ == '__main__':
     
     # Initialize model
     model = UnfoldingFlow(model_path=path_to_model,
-                    read_CondTransf=True,
+                    read_CondTransf=False,
                     log_mean = conf.scaling_params.log_mean,
                     log_std = conf.scaling_params.log_std,
                     no_jets=conf.input_shape.number_jets,
@@ -440,6 +440,9 @@ if __name__ == '__main__':
                     flow_bound=conf.unfolding_flow.bound,
                     device=device,
                     dtype=torch.float64)
+
+    state_dict = torch.load(path_to_model, map_location=device)
+    model.load_state_dict(state_dict['model_state_dict'])
     
     # Copy model on GPU memory
     if (device == torch.device('cuda')):

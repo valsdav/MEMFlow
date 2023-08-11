@@ -66,6 +66,7 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
     torch.autograd.set_detect_anomaly(True)
 
     sampling_Forward = config.training_params.sampling_Forward
+    N_samplesLoss = 5
     
     for e in range(config.training_params.nepochs):
         
@@ -116,11 +117,11 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = model.flow(PS_regressed).sample((N_samplesLoss,)) # size [100,1024,10]
                     flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
 
                     PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
-                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target = PS_target.expand(N_samplesLoss, -1, -1) # expand only the first dimension [100,1024,10]
                     PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
@@ -198,18 +199,18 @@ def TrainingAndValidLoop(config, model, trainingLoader, validLoader, outputDir, 
 
                 if sampling_Forward:
 
-                    flow_sample = model.flow(PS_regressed).sample((100,)) # size [100,1024,10]
+                    flow_sample = model.flow(PS_regressed).sample((N_samplesLoss,)) # size [100,1024,10]
                     flow_sample = torch.flatten(flow_sample, start_dim=0, end_dim=1) # size[102400,10]
 
-                    PS_target = PS_target.unsqueeze(dim=0) # size [1,1024,10]
-                    PS_target = PS_target.expand(100, -1, -1) # expand only the first dimension [100,1024,10]
-                    PS_target = torch.flatten(PS_target, start_dim=0, end_dim=1) # size[102400,10]
+                    PS_target_expand = PS_target.unsqueeze(dim=0) # size [1,1024,10]
+                    PS_target_expand = PS_target_expand.expand(N_samplesLoss, -1, -1) # expand only the first dimension [100,1024,10]
+                    PS_target_expand = torch.flatten(PS_target_expand, start_dim=0, end_dim=1) # size[102400,10]
 
                     sample_mask_all = (flow_sample>=0) & (flow_sample<=1)
                     sample_mask = torch.all(sample_mask_all, dim=1)
 
                     flow_sample = flow_sample[sample_mask]
-                    PS_target_masked = PS_target[sample_mask]
+                    PS_target_masked = PS_target_expand[sample_mask]
                     
                     flow_sample_grad = flow_sample.clone().detach()
                     PS_target_grad = PS_target_masked.clone().detach()
