@@ -24,3 +24,4 @@ correctionlib
 comet_ml
 h5py
 onnxruntime-gpu
+pybind11
